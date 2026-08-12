@@ -203,12 +203,12 @@ const MOCK_DECK = RAW_DECK.map((card) =>
 );
 
 function getTier(accuracy, total) {
-  if (total === 0) return { title: "No Report Filed", blurb: "Play today's set first." };
-  if (accuracy >= 90) return { title: "Certified Slop Inspector", blurb: "Sharper than most detectors on the market." };
-  if (accuracy >= 75) return { title: "Sharp-Eyed Skeptic", blurb: "You catch the tells. A few sneaky ones still slipped by." };
-  if (accuracy >= 55) return { title: "Casual Scroller", blurb: "You'd survive a feed, but a determined slop farm would get you." };
-  if (accuracy >= 35) return { title: "Getting Rekt by Robots", blurb: "The machines won this round. Check the hands next time." };
-  return { title: "AI Blind", blurb: "Somewhere, a diffusion model is very proud of itself." };
+  if (total === 0) return { title: "No Report Filed", blurb: "Play today's set." };
+  if (accuracy >= 90) return { title: "Certified Inspector", blurb: "Sharp eyes." };
+  if (accuracy >= 75) return { title: "Sharp-Eyed Skeptic", blurb: "Solid instincts." };
+  if (accuracy >= 55) return { title: "Casual Scroller", blurb: "Room to improve." };
+  if (accuracy >= 35) return { title: "Getting Rekt by Robots", blurb: "The machines won this round." };
+  return { title: "AI Blind", blurb: "Rough round." };
 }
 
 const DRAG_THRESHOLD = 110;
@@ -273,6 +273,7 @@ export default function SlopRadar() {
   const [history, setHistory] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [lifetime, setLifetime] = useState(DEFAULT_LIFETIME);
@@ -311,34 +312,24 @@ export default function SlopRadar() {
     };
   }, []);
 
-  // Load lifetime stats + first-visit flag from persistent artifact storage.
+  // Load lifetime stats + first-visit flag from the browser's localStorage.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await window.storage.get(LIFETIME_KEY, false);
-        if (!cancelled && result && result.value) {
-          setLifetime({ ...DEFAULT_LIFETIME, ...JSON.parse(result.value) });
-        }
-      } catch {
-        // No record yet — defaults stand.
-      } finally {
-        if (!cancelled) setLifetimeLoaded(true);
+    try {
+      const raw = localStorage.getItem(LIFETIME_KEY);
+      if (raw) setLifetime({ ...DEFAULT_LIFETIME, ...JSON.parse(raw) });
+    } catch {
+      // No record yet, or storage unavailable (e.g. private browsing) — defaults stand.
+    }
+    setLifetimeLoaded(true);
+
+    try {
+      if (!localStorage.getItem(INTRO_KEY)) {
+        setShowHelp(true);
+        localStorage.setItem(INTRO_KEY, "1");
       }
-      try {
-        await window.storage.get(INTRO_KEY, false);
-      } catch {
-        if (!cancelled) setShowHelp(true);
-        try {
-          await window.storage.set(INTRO_KEY, "1", false);
-        } catch {
-          // Storage unavailable — help modal still shows this session.
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    } catch {
+      // Storage unavailable — help modal just shows every visit instead of once.
+    }
   }, []);
 
   /* ---------------------- sound effects (Web Audio API) ---------------------- */
@@ -376,7 +367,7 @@ export default function SlopRadar() {
     playTone(640, 0.09, "sine", 0.045, 0.02);
     playTone(880, 0.12, "sine", 0.045, 0.11);
   }, [playTone]);
-  const playIncorrect = useCallback(() => playTone(190, 0.2, "sine", 0.05, 0.02), [playTone]);
+  const playIncorrect = useCallback(() => playTone(190, 0.26, "sine", 0.13, 0.02), [playTone]);
   const playClick = useCallback(() => playTone(500, 0.05, "sine", 0.02), [playTone]);
 
   const dayNumber = useMemo(getDayNumber, []);
@@ -409,7 +400,11 @@ export default function SlopRadar() {
         aiCorrect: prev.aiCorrect + aiAnswers.filter((h) => h.correct).length,
         aiTotal: prev.aiTotal + aiAnswers.length,
       };
-      window.storage.set(LIFETIME_KEY, JSON.stringify(updated), false).catch(() => {});
+      try {
+        localStorage.setItem(LIFETIME_KEY, JSON.stringify(updated));
+      } catch {
+        // Storage unavailable (e.g. private browsing) — stats just won't persist this session.
+      }
       return updated;
     });
   }, [gameOver, lifetimeLoaded, deck.length, score, accuracy, history]);
@@ -885,11 +880,15 @@ export default function SlopRadar() {
         </footer>
       )}
 
-      {!gameOver && (
-        <p className="pb-6 font-data text-center px-4" style={{ color: "#B7AD9C", fontSize: 10 }}>
-          &larr; SLOP &nbsp;&middot;&nbsp; REAL &rarr; &nbsp;&middot;&nbsp; DRAG, CLICK, OR SWIPE THE TRACKPAD
-        </p>
-      )}
+      <p className="pb-6 font-data text-center px-4">
+        <button
+          onClick={() => setShowPrivacy(true)}
+          className="underline"
+          style={{ color: "#C9BB9C", fontSize: 10, background: "none", border: "none", cursor: "pointer" }}
+        >
+          Privacy Policy
+        </button>
+      </p>
 
       {/* How to Play modal */}
       {showHelp && (
@@ -912,10 +911,6 @@ export default function SlopRadar() {
               </li>
               <li className="flex gap-2.5">
                 <span style={{ color: "#C99A3B" }}>3.</span>
-                You'll see whether you're right immediately, plus a one-line tell.
-              </li>
-              <li className="flex gap-2.5">
-                <span style={{ color: "#C99A3B" }}>4.</span>
                 Eight images a day. Your streaks and accuracy carry over forever.
               </li>
             </ul>
@@ -925,6 +920,36 @@ export default function SlopRadar() {
               style={{ backgroundColor: "#332E29", color: "#FBF6EC" }}
             >
               Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Privacy Policy modal */}
+      {showPrivacy && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-5 fade-in" style={{ backgroundColor: "rgba(51,46,41,0.45)" }}>
+          <div
+            className="w-full max-w-sm rounded-2xl p-7 rise-in overflow-y-auto"
+            style={{ backgroundColor: "#FFFEFB", border: "1px solid #EDE2CE", boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)", maxHeight: "80vh" }}
+          >
+            <h2 className="font-display text-xl font-semibold text-center mb-4" style={{ color: "#332E29" }}>
+              Privacy Policy
+            </h2>
+            <div className="font-body text-sm leading-relaxed space-y-3 mb-6" style={{ color: "#514C43" }}>
+              <p>Slop Radar does not collect or store any personal information, and there are no accounts, cookies, or advertising trackers on this site.</p>
+              <p>
+                Your game stats (games played, accuracy, streaks) are saved only in your own browser&apos;s local storage. They never leave your device
+                and are not visible to us. Clearing your browser data will reset them.
+              </p>
+              <p>The images and their labels are fetched from our Supabase database to build each day&apos;s puzzle. No information about you is sent as part of that request.</p>
+              <p>This app is hosted on Vercel, which may log basic, anonymized technical data (like request counts) for operating the service, separate from anything this app itself collects.</p>
+            </div>
+            <button
+              onClick={() => setShowPrivacy(false)}
+              className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-body font-semibold transition active:scale-95"
+              style={{ backgroundColor: "#332E29", color: "#FBF6EC" }}
+            >
+              Close
             </button>
           </div>
         </div>
@@ -965,6 +990,10 @@ export default function SlopRadar() {
                   <p className="font-data" style={{ color: "#9C9285", fontSize: 11 }}>
                     {score.correct}/{deck.length} correct &middot; {accuracy}% accuracy
                   </p>
+                </div>
+
+                <div className="lg:hidden">
+                  <RevealGridCompact history={history} />
                 </div>
               </>
             ) : (
@@ -1009,8 +1038,145 @@ export default function SlopRadar() {
               </button>
             )}
           </div>
+
+          {gameOver && (
+            <>
+              <RevealRail label="Slop" color="#BD6A4E" cards={history.filter((h) => h.item.isAI)} side="left" />
+              <RevealRail label="Real" color="#5C7B58" cards={history.filter((h) => !h.item.isAI)} side="right" />
+            </>
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function RevealGridCompact({ history }) {
+  const slop = history.filter((h) => h.item.isAI);
+  const real = history.filter((h) => !h.item.isAI);
+
+  return (
+    <div className="mb-5">
+      <p className="font-data uppercase text-center mb-2.5" style={{ color: "#9C9285", fontSize: 10, letterSpacing: "0.15em" }}>
+        The Reveal
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <RevealColumnCompact label="Slop" color="#BD6A4E" cards={slop} />
+        <RevealColumnCompact label="Real" color="#5C7B58" cards={real} />
+      </div>
+    </div>
+  );
+}
+
+function RevealColumnCompact({ label, color, cards }) {
+  return (
+    <div>
+      <p className="font-display font-semibold text-center mb-2" style={{ color, fontSize: 13 }}>
+        {label}
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        {cards.map((h, i) => (
+          <div key={i} className="relative rounded-lg overflow-hidden" style={{ border: `1.5px solid ${color}55` }}>
+            <img
+              src={h.item.url}
+              alt={h.item.title}
+              className="w-full object-cover"
+              style={{ aspectRatio: "1 / 1" }}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+                e.currentTarget.parentElement.style.background = "#F1E9D8";
+              }}
+            />
+            <span
+              className="absolute top-1 right-1 rounded-full flex items-center justify-center"
+              style={{ width: 18, height: 18, backgroundColor: h.correct ? "#E3EBE0" : "#F2E0D6" }}
+            >
+              {h.correct ? (
+                <Check size={11} style={{ color: "#5C7B58" }} strokeWidth={3.5} />
+              ) : (
+                <X size={11} style={{ color: "#B0603F" }} strokeWidth={3.5} />
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RevealRail({ label, color, cards, side }) {
+  // Chunk into rows of 2, however many rows that ends up being — works for
+  // any split (3 slop / 5 real, 8 / 0, etc.), not just an even 4-and-4.
+  const rows = [];
+  for (let i = 0; i < cards.length; i += 2) rows.push(cards.slice(i, i + 2));
+
+  const ROW_GAP = 10;
+  const LABEL_BLOCK = 40; // label height + gap below it
+  const ROW_MAX = 150; // px — caps square size when a side has very few rows
+  const rowHeight =
+    rows.length > 0
+      ? `min(calc((92vh - ${LABEL_BLOCK}px - ${(rows.length - 1) * ROW_GAP}px) / ${rows.length}), ${ROW_MAX}px)`
+      : "0px";
+
+  return (
+    <div
+      className="hidden lg:block"
+      style={{
+        position: "fixed",
+        [side]: "2vw",
+        top: "50%",
+        transform: "translateY(-50%)",
+        zIndex: 51,
+        height: "92vh",
+        width: ROW_MAX * 2 + ROW_GAP,
+      }}
+    >
+      <p
+        className="font-display font-semibold text-center"
+        style={{ color, fontSize: 18, textShadow: "0 1px 4px rgba(0,0,0,0.3)", height: 28, marginBottom: 12 }}
+      >
+        {label}
+      </p>
+      {rows.map((rowCards, r) => (
+        <div
+          key={r}
+          className="flex justify-center"
+          style={{ height: rowHeight, gap: 10, marginBottom: r < rows.length - 1 ? ROW_GAP : 0 }}
+        >
+          {rowCards.map((h, i) => (
+            <div
+              key={i}
+              className="relative rounded-xl overflow-hidden"
+              style={{
+                height: "100%",
+                aspectRatio: "1 / 1",
+                border: `2px solid ${color}88`,
+                boxShadow: "0 10px 28px -6px rgba(0,0,0,0.4)",
+              }}
+            >
+              <img
+                src={h.item.url}
+                alt={h.item.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  e.currentTarget.parentElement.style.background = "#F1E9D8";
+                }}
+              />
+              <span
+                className="absolute top-1.5 left-1.5 rounded-full flex items-center justify-center"
+                style={{ width: 22, height: 22, backgroundColor: h.correct ? "#E3EBE0" : "#F2E0D6" }}
+              >
+                {h.correct ? (
+                  <Check size={13} style={{ color: "#5C7B58" }} strokeWidth={3.5} />
+                ) : (
+                  <X size={13} style={{ color: "#B0603F" }} strokeWidth={3.5} />
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

@@ -471,7 +471,7 @@ export default function SlopRadar() {
       });
       setPhase("feedback");
 
-      const t = setTimeout(() => advance(direction), 1250);
+      const t = setTimeout(() => advance(direction), 600);
       timers.current.push(t);
     },
     [phase, currentCard, advance, playSwipe, playCorrect, playIncorrect]
@@ -563,10 +563,10 @@ export default function SlopRadar() {
     const flyY = -40;
     cardTransform = `translate(${flyX}px, ${flyY}px) rotate(${exitDirection * 18}deg)`;
     cardTransition = "transform 0.32s cubic-bezier(0.55,0,1,0.45)";
-  } else if (phase === "feedback") {
-    cardTransform = "translate(0px, 0px) rotate(0deg)";
-    cardTransition = "transform 0.3s ease-out";
   }
+  // No "feedback" phase override here anymore — the card simply holds
+  // whatever position/rotation it was swiped to instead of snapping back
+  // to center before flying off.
 
   const tier = getTier(accuracy, score.total);
 
@@ -624,6 +624,8 @@ export default function SlopRadar() {
         @keyframes riseIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .rise-in { animation: riseIn 0.25s ease-out; }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+        .pop-in { animation: popIn 0.28s cubic-bezier(0.34,1.56,0.64,1); }
         .fade-in { animation: fadeIn 0.2s ease-out; }
       `}</style>
 
@@ -815,46 +817,18 @@ export default function SlopRadar() {
 
                     {isTop && phase === "feedback" && feedback && (
                       <div
-                        className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 fade-in"
-                        style={{ backgroundColor: "rgba(251,246,236,0.94)" }}
+                        className="absolute top-4 right-4 rounded-full flex items-center justify-center pop-in"
+                        style={{
+                          width: 46,
+                          height: 46,
+                          backgroundColor: feedback.correct ? "#E3EBE0" : "#F2E0D6",
+                          boxShadow: "0 6px 16px -4px rgba(0,0,0,0.25)",
+                        }}
                       >
                         {feedback.correct ? (
-                          <>
-                            <div className="w-11 h-11 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "#E3EBE0" }}>
-                              <Check size={22} style={{ color: "#5C7B58" }} strokeWidth={3} />
-                            </div>
-                            <p className="font-display text-xl font-semibold" style={{ color: "#5C7B58" }}>
-                              Correct
-                            </p>
-                          </>
+                          <Check size={24} style={{ color: "#5C7B58" }} strokeWidth={3.5} />
                         ) : (
-                          <>
-                            <div className="w-11 h-11 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: "#F2E0D6" }}>
-                              <X size={22} style={{ color: "#B0603F" }} strokeWidth={3} />
-                            </div>
-                            <p className="font-display text-xl font-semibold" style={{ color: "#B0603F" }}>
-                              Not Quite
-                            </p>
-                          </>
-                        )}
-                        <p
-                          className="font-data uppercase tracking-widest mt-3 flex items-center gap-1.5"
-                          style={{ color: "#B8863B", fontSize: 10 }}
-                        >
-                          {feedback.isAI ? (
-                            <AIIcon size={12} color="#B8863B" strokeWidth={2} />
-                          ) : (
-                            <RealIcon size={12} color="#B8863B" strokeWidth={2} />
-                          )}
-                          {feedback.isAI ? "AI Generated" : "Real Photograph"}
-                        </p>
-                        <p className="font-body text-sm mt-2 leading-relaxed" style={{ color: "#6B655A", maxWidth: "90%" }}>
-                          {feedback.reason}
-                        </p>
-                        {!feedback.isAI && feedback.verifiedYear && (
-                          <p className="font-data mt-2.5" style={{ color: "#9C9285", fontSize: 9 }}>
-                            VERIFIED UPLOAD: {feedback.verifiedYear} &middot; PRE-DATES MAINSTREAM AI IMAGERY
-                          </p>
+                          <X size={24} style={{ color: "#B0603F" }} strokeWidth={3.5} />
                         )}
                       </div>
                     )}

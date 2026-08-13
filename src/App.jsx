@@ -212,7 +212,7 @@ function getTier(accuracy, total) {
 }
 
 const DRAG_THRESHOLD = 110;
-const MAX_DRAG = 150; // cap how far the card can visually follow the drag, so its feedback text never ends up off-screen
+const MAX_DRAG = 150; // mobile-only cap — narrow screens have little margin around the card, so an uncapped drag can push its feedback text off-screen. Desktop has plenty of margin and stays uncapped.
 const VISIBLE_STACK = 3;
 const LIFETIME_KEY = "slop-radar-lifetime-stats";
 const INTRO_KEY = "slop-radar-seen-intro";
@@ -498,7 +498,8 @@ export default function SlopRadar() {
   };
   const onPointerMove = (e) => {
     if (!isDragging || phase !== "idle") return;
-    const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, e.clientX - dragStart.current.x));
+    let dx = e.clientX - dragStart.current.x;
+    if (window.innerWidth < 768) dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, dx));
     const dy = e.clientY - dragStart.current.y;
     dragXRef.current = dx;
     setDrag({ x: dx, y: dy * 0.35 });
@@ -525,7 +526,9 @@ export default function SlopRadar() {
     function onWheelNative(e) {
       if (phase !== "idle") return;
       e.preventDefault();
-      dragXRef.current = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, dragXRef.current - e.deltaX));
+      let next = dragXRef.current - e.deltaX;
+      if (window.innerWidth < 768) next = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, next));
+      dragXRef.current = next;
       setIsDragging(true);
       setDrag({ x: dragXRef.current, y: 0 });
 

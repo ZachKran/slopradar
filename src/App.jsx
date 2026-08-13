@@ -718,8 +718,8 @@ export default function SlopRadar() {
       <main className="flex-1 w-full flex items-center justify-center px-5 pb-4">
         {!gameOver ? (
           <div
-            className="relative w-full"
-            style={{ maxWidth: 300, height: "58vh", maxHeight: 420, minHeight: 300 }}
+            className="relative"
+            style={{ width: "min(92vw, 60vh, 460px)", height: "min(92vw, 60vh, 460px)" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;
@@ -729,7 +729,7 @@ export default function SlopRadar() {
                 <div
                   key={item.id}
                   ref={isTop ? topCardRef : undefined}
-                  className="absolute inset-0 rounded-2xl p-3 flex flex-col"
+                  className="absolute inset-0 rounded-2xl p-3 flex flex-col justify-center"
                   style={{
                     backgroundColor: "#FFFEFB",
                     border: isTop ? `1.5px solid ${feedbackBorder}` : "1px solid #EDE2CE",
@@ -757,12 +757,12 @@ export default function SlopRadar() {
                     }}
                   />
 
-                  <div className="relative flex-1 rounded-xl overflow-hidden" style={{ backgroundColor: "#F1E9D8" }}>
+                  <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: "1 / 1", backgroundColor: "#F1E9D8" }}>
                     <img
                       src={item.url}
                       alt={item.title}
                       draggable={false}
-                      className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                      className="absolute inset-0 w-full h-full object-contain pointer-events-none"
                       onError={(e) => {
                         e.currentTarget.style.display = "none";
                         e.currentTarget.parentElement.style.background = "linear-gradient(160deg,#F1E9D8,#E4D6B8)";
@@ -1076,11 +1076,11 @@ function RevealColumnCompact({ label, color, cards }) {
       </p>
       <div className="grid grid-cols-2 gap-2">
         {cards.map((h, i) => (
-          <div key={i} className="relative rounded-lg overflow-hidden" style={{ border: `1.5px solid ${color}55` }}>
+          <div key={i} className="relative rounded-lg overflow-hidden" style={{ border: `1.5px solid ${color}55`, backgroundColor: "#F1E9D8" }}>
             <img
               src={h.item.url}
               alt={h.item.title}
-              className="w-full object-cover"
+              className="w-full object-contain"
               style={{ aspectRatio: "1 / 1" }}
               onError={(e) => {
                 e.currentTarget.style.display = "none";
@@ -1152,12 +1152,13 @@ function RevealRail({ label, color, cards, side }) {
                 aspectRatio: "1 / 1",
                 border: `2px solid ${color}88`,
                 boxShadow: "0 10px 28px -6px rgba(0,0,0,0.4)",
+                backgroundColor: "#F1E9D8",
               }}
             >
               <img
                 src={h.item.url}
                 alt={h.item.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                   e.currentTarget.parentElement.style.background = "#F1E9D8";

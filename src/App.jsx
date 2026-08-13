@@ -212,6 +212,7 @@ function getTier(accuracy, total) {
 }
 
 const DRAG_THRESHOLD = 110;
+const MAX_DRAG = 150; // cap how far the card can visually follow the drag, so its feedback text never ends up off-screen
 const VISIBLE_STACK = 3;
 const LIFETIME_KEY = "slop-radar-lifetime-stats";
 const INTRO_KEY = "slop-radar-seen-intro";
@@ -497,7 +498,7 @@ export default function SlopRadar() {
   };
   const onPointerMove = (e) => {
     if (!isDragging || phase !== "idle") return;
-    const dx = e.clientX - dragStart.current.x;
+    const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, e.clientX - dragStart.current.x));
     const dy = e.clientY - dragStart.current.y;
     dragXRef.current = dx;
     setDrag({ x: dx, y: dy * 0.35 });
@@ -524,7 +525,7 @@ export default function SlopRadar() {
     function onWheelNative(e) {
       if (phase !== "idle") return;
       e.preventDefault();
-      dragXRef.current -= e.deltaX;
+      dragXRef.current = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, dragXRef.current - e.deltaX));
       setIsDragging(true);
       setDrag({ x: dragXRef.current, y: 0 });
 
@@ -719,7 +720,7 @@ export default function SlopRadar() {
         {!gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(92vw, 60vh, 460px)", height: "min(92vw, 60vh, 460px)" }}
+            style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;
@@ -822,7 +823,7 @@ export default function SlopRadar() {
                         )}
                         <p
                           className="font-display font-semibold mt-2"
-                          style={{ fontSize: 26, color: feedback.correct ? "#5C7B58" : "#B0603F" }}
+                          style={{ fontSize: "clamp(18px, 6vw, 26px)", color: feedback.correct ? "#5C7B58" : "#B0603F" }}
                         >
                           {feedback.correct ? "Correct" : "Wrong"}
                         </p>
@@ -931,7 +932,7 @@ export default function SlopRadar() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-5 fade-in" style={{ backgroundColor: "rgba(51,46,41,0.45)" }}>
           <div
             className="w-full max-w-sm rounded-2xl p-7 rise-in overflow-y-auto"
-            style={{ backgroundColor: "#FFFEFB", border: "1px solid #EDE2CE", boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)", maxHeight: "80vh" }}
+            style={{ backgroundColor: "#FFFEFB", border: "1px solid #EDE2CE", boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)", maxHeight: "80dvh" }}
           >
             <h2 className="font-display text-xl font-semibold text-center mb-4" style={{ color: "#332E29" }}>
               Privacy Policy
@@ -965,7 +966,7 @@ export default function SlopRadar() {
               backgroundColor: "#FFFEFB",
               border: "1px solid #EDE2CE",
               boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)",
-              maxHeight: "90vh",
+              maxHeight: "90dvh",
             }}
           >
             {gameOver ? (
@@ -1116,7 +1117,7 @@ function RevealRail({ label, color, cards, side }) {
   const ROW_MAX = 150; // px — caps square size when a side has very few rows
   const rowHeight =
     rows.length > 0
-      ? `min(calc((92vh - ${LABEL_BLOCK}px - ${(rows.length - 1) * ROW_GAP}px) / ${rows.length}), ${ROW_MAX}px)`
+      ? `min(calc((92dvh - ${LABEL_BLOCK}px - ${(rows.length - 1) * ROW_GAP}px) / ${rows.length}), ${ROW_MAX}px)`
       : "0px";
 
   return (
@@ -1128,7 +1129,7 @@ function RevealRail({ label, color, cards, side }) {
         top: "50%",
         transform: "translateY(-50%)",
         zIndex: 51,
-        height: "92vh",
+        height: "92dvh",
         width: ROW_MAX * 2 + ROW_GAP,
       }}
     >

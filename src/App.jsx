@@ -204,15 +204,14 @@ const MOCK_DECK = RAW_DECK.map((card) =>
 
 function getTier(accuracy, total) {
   if (total === 0) return { title: "No Report Filed", blurb: "Play today's set." };
-  if (accuracy >= 90) return { title: "Certified Inspector", blurb: "Sharp eyes." };
-  if (accuracy >= 75) return { title: "Sharp-Eyed Skeptic", blurb: "Solid instincts." };
-  if (accuracy >= 55) return { title: "Casual Scroller", blurb: "Room to improve." };
-  if (accuracy >= 35) return { title: "Getting Rekt by Robots", blurb: "The machines won this round." };
-  return { title: "AI Blind", blurb: "Rough round." };
+  if (accuracy >= 90) return { title: "Slop Detective", blurb: "Nothing Gets Past You." };
+  if (accuracy >= 75) return { title: "Fine Tuned Radar", blurb: "You're Mostly On Target." };
+  if (accuracy >= 55) return { title: "Curious Observer", blurb: "You're Getting There." };
+  if (accuracy >= 35) return { title: "Struggling Scout", blurb: "Tough Set Today." };
+  return { title: "Absolute Rookie", blurb: "Everyone Starts Somewhere." };
 }
 
 const DRAG_THRESHOLD = 110;
-const MAX_DRAG = 150; // mobile-only cap — narrow screens have little margin around the card, so an uncapped drag can push its feedback text off-screen. Desktop has plenty of margin and stays uncapped.
 const VISIBLE_STACK = 3;
 const LIFETIME_KEY = "slop-radar-lifetime-stats";
 const INTRO_KEY = "slop-radar-seen-intro";
@@ -269,6 +268,8 @@ function RealIcon({ size = 26, color = "#5C7B58" }) {
 
 export default function SlopRadar() {
   const [deck, setDeck] = useState(MOCK_DECK);
+  const [deckLoaded, setDeckLoaded] = useState(false);
+  const [introPlayed, setIntroPlayed] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState({ correct: 0, total: 0, streak: 0, bestStreak: 0 });
   const [history, setHistory] = useState([]);
@@ -307,6 +308,13 @@ export default function SlopRadar() {
     fetchDailyDeck().then((cards) => {
       if (cancelled) return;
       if (cards) setDeck(cards);
+      setDeckLoaded(true);
+      // Let the fall-in animation play once for the first cards, then stop
+      // applying it to cards that mount later as the player swipes through.
+      const t = setTimeout(() => {
+        if (!cancelled) setIntroPlayed(true);
+      }, 950);
+      timers.current.push(t);
     });
     return () => {
       cancelled = true;
@@ -498,8 +506,7 @@ export default function SlopRadar() {
   };
   const onPointerMove = (e) => {
     if (!isDragging || phase !== "idle") return;
-    let dx = e.clientX - dragStart.current.x;
-    if (window.innerWidth < 768) dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, dx));
+    const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
     dragXRef.current = dx;
     setDrag({ x: dx, y: dy * 0.35 });
@@ -526,9 +533,7 @@ export default function SlopRadar() {
     function onWheelNative(e) {
       if (phase !== "idle") return;
       e.preventDefault();
-      let next = dragXRef.current - e.deltaX;
-      if (window.innerWidth < 768) next = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, next));
-      dragXRef.current = next;
+      dragXRef.current -= e.deltaX;
       setIsDragging(true);
       setDrag({ x: dragXRef.current, y: 0 });
 
@@ -625,6 +630,13 @@ export default function SlopRadar() {
         .rise-in { animation: riseIn 0.25s ease-out; }
         @keyframes popIn { 0% { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
         .pop-in { animation: popIn 0.28s cubic-bezier(0.34,1.56,0.64,1); }
+        @keyframes fallIn {
+          0% { opacity: 0; transform: translateY(-160%) rotate(-8deg); }
+          55% { opacity: 1; transform: translateY(10%) rotate(3deg); }
+          75% { transform: translateY(-4%) rotate(-1.5deg); }
+          100% { opacity: 1; transform: translateY(0) rotate(0deg); }
+        }
+        .fall-in { animation: fallIn 0.7s cubic-bezier(0.32,0.9,0.36,1) both; }
         .fade-in { animation: fadeIn 0.2s ease-out; }
       `}</style>
 
@@ -720,7 +732,14 @@ export default function SlopRadar() {
 
       {/* Card stack */}
       <main className="flex-1 w-full flex items-center justify-center px-5 pb-4">
-        {!gameOver ? (
+        {!deckLoaded ? (
+          <div className="w-full max-w-md text-center font-body">
+            <Sparkle size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
+            <p className="font-display text-lg" style={{ color: "#6B655A" }}>
+              Loading today's set...
+            </p>
+          </div>
+        ) : !gameOver ? (
           <div
             className="relative"
             style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)" }}
@@ -732,25 +751,28 @@ export default function SlopRadar() {
               return (
                 <div
                   key={item.id}
-                  ref={isTop ? topCardRef : undefined}
-                  className="absolute inset-0 rounded-2xl p-3 flex flex-col justify-center"
-                  style={{
-                    backgroundColor: "#FFFEFB",
-                    border: isTop ? `1.5px solid ${feedbackBorder}` : "1px solid #EDE2CE",
-                    boxShadow: "0 10px 30px -12px rgba(60,45,20,0.18)",
-                    zIndex: VISIBLE_STACK - offset,
-                    transform: isTop ? cardTransform : `translateY(${stackY}px) scale(${stackScale})`,
-                    transition: isTop
-                      ? `${cardTransition}, border-color 0.25s ease-out`
-                      : "transform 0.32s cubic-bezier(0.22,1,0.36,1)",
-                    touchAction: "none",
-                    cursor: isTop ? (isDragging ? "grabbing" : "grab") : "default",
-                  }}
-                  onPointerDown={isTop ? onPointerDown : undefined}
-                  onPointerMove={isTop ? onPointerMove : undefined}
-                  onPointerUp={isTop ? endPointerDrag : undefined}
-                  onPointerCancel={isTop ? endPointerDrag : undefined}
+                  className={`absolute inset-0${introPlayed ? "" : " fall-in"}`}
+                  style={{ zIndex: VISIBLE_STACK - offset, animationDelay: introPlayed ? undefined : `${offset * 70}ms` }}
                 >
+                  <div
+                    ref={isTop ? topCardRef : undefined}
+                    className="absolute inset-0 rounded-2xl p-3 flex flex-col justify-center"
+                    style={{
+                      backgroundColor: "#FFFEFB",
+                      border: isTop ? `1.5px solid ${feedbackBorder}` : "1px solid #EDE2CE",
+                      boxShadow: "0 10px 30px -12px rgba(60,45,20,0.18)",
+                      transform: isTop ? cardTransform : `translateY(${stackY}px) scale(${stackScale})`,
+                      transition: isTop
+                        ? `${cardTransition}, border-color 0.25s ease-out`
+                        : "transform 0.32s cubic-bezier(0.22,1,0.36,1)",
+                      touchAction: "none",
+                      cursor: isTop ? (isDragging ? "grabbing" : "grab") : "default",
+                    }}
+                    onPointerDown={isTop ? onPointerDown : undefined}
+                    onPointerMove={isTop ? onPointerMove : undefined}
+                    onPointerUp={isTop ? endPointerDrag : undefined}
+                    onPointerCancel={isTop ? endPointerDrag : undefined}
+                  >
                   <div
                     className="absolute -top-2.5 left-1/2 w-14 h-5 rounded-sm pointer-events-none z-10"
                     style={{
@@ -832,6 +854,7 @@ export default function SlopRadar() {
                         </p>
                       </div>
                     )}
+                  </div>
                   </div>
                 </div>
               );

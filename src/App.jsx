@@ -362,13 +362,13 @@ export default function SlopRadar() {
     }
   }, []);
 
-  const playSwipe = useCallback(() => playTone(340, 0.07, "triangle", 0.025), [playTone]);
+  const playSwipe = useCallback(() => playTone(340, 0.08, "triangle", 0.09), [playTone]);
   const playCorrect = useCallback(() => {
-    playTone(640, 0.09, "sine", 0.045, 0.02);
-    playTone(880, 0.12, "sine", 0.045, 0.11);
+    playTone(640, 0.1, "sine", 0.18, 0.02);
+    playTone(880, 0.14, "sine", 0.18, 0.11);
   }, [playTone]);
-  const playIncorrect = useCallback(() => playTone(190, 0.26, "sine", 0.13, 0.02), [playTone]);
-  const playClick = useCallback(() => playTone(500, 0.05, "sine", 0.02), [playTone]);
+  const playIncorrect = useCallback(() => playTone(190, 0.28, "sine", 0.32, 0.02), [playTone]);
+  const playClick = useCallback(() => playTone(500, 0.06, "sine", 0.08), [playTone]);
 
   const dayNumber = useMemo(getDayNumber, []);
   const currentCard = deck[currentIndex];
@@ -812,19 +812,20 @@ export default function SlopRadar() {
 
                     {isTop && phase === "feedback" && feedback && (
                       <div
-                        className="absolute top-4 right-4 rounded-full flex items-center justify-center pop-in"
-                        style={{
-                          width: 46,
-                          height: 46,
-                          backgroundColor: feedback.correct ? "#E3EBE0" : "#F2E0D6",
-                          boxShadow: "0 6px 16px -4px rgba(0,0,0,0.25)",
-                        }}
+                        className="absolute inset-0 flex flex-col items-center justify-center pop-in"
+                        style={{ backgroundColor: feedback.correct ? "#E3EBE0" : "#F2E0D6" }}
                       >
                         {feedback.correct ? (
-                          <Check size={24} style={{ color: "#5C7B58" }} strokeWidth={3.5} />
+                          <Check size={40} style={{ color: "#5C7B58" }} strokeWidth={3} />
                         ) : (
-                          <X size={24} style={{ color: "#B0603F" }} strokeWidth={3.5} />
+                          <X size={40} style={{ color: "#B0603F" }} strokeWidth={3} />
                         )}
+                        <p
+                          className="font-display font-semibold mt-2"
+                          style={{ fontSize: 26, color: feedback.correct ? "#5C7B58" : "#B0603F" }}
+                        >
+                          {feedback.correct ? "Correct" : "Wrong"}
+                        </p>
                       </div>
                     )}
                   </div>

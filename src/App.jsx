@@ -15,40 +15,19 @@ import {
 } from "lucide-react";
 
 /* =============================================================================
-   SLOP RADAR — DATA ARCHITECTURE BLUEPRINT
+   SLOP RADAR — DATA ARCHITECTURE
    =============================================================================
-   Ships with a hardcoded MOCK_DECK so the game works instantly with zero
-   setup. In production, today's eight images should come from a small,
-   versioned "daily deck" rather than an infinite random stream — exactly like
-   Wordle serves one puzzle per calendar day.
+   Today's 10 images are pulled live from a Supabase "cards" table (see
+   supabaseClient.js) — the entire pool is fetched, then deterministically
+   shuffled using today's date as a seed (see seededShuffle below), so every
+   player gets the identical 10 cards on the same calendar day, and a
+   different set the next day. Add more rows to the table any time via the
+   Supabase dashboard; no redeploy needed.
 
-   OPTION A — Static daily JSON (simplest, works on any static host)
-     /public/daily/2026-08-02.json
-     { "day": 214, "cards": [ { "id": "d214-01", "url": "...", "isAI": false,
-       "title": "...", "reason": "..." }, ... ] }
-     A cron job (GitHub Action, Vercel Cron) drops a new file at midnight UTC.
-     Client: fetch(`/daily/${todayISO}.json`)
-
-   OPTION B — Serverless function (adds validation, rotation, secrets)
-     // /api/daily-deck.js
-     export default async function handler(req, res) {
-       const today = new Date().toISOString().slice(0, 10);
-       const deck = await db.collection("daily_decks").findOne({ date: today });
-       if (!deck) return res.status(404).json({ error: "no deck for today" });
-       res.setHeader("Cache-Control", "public, s-maxage=3600");
-       return res.status(200).json(deck);
-     }
-     Date logic lives server-side so every player gets the identical puzzle.
-
-   OPTION C — Lightweight CMS (Sanity / Contentful / a Notion database)
-     Editors tag each image `isAI: true/false` plus a one-line "reason" in a
-     no-code table; a build step or ISR revalidation republishes the JSON
-     from Option A — giving non-engineers control without touching this file.
-
-   `fetchDailyDeck()` below performs a real fetch against `/api/daily-deck`.
-   If that route isn't deployed (true for this standalone artifact), it
-   falls back to MOCK_DECK so the game is always playable. Swap in Option
-   A or B by deploying that one route — no other code changes required.
+   There is intentionally no hardcoded fallback deck. If Supabase is
+   unreachable, or the pool has fewer than 4 cards, fetchDailyDeck() returns
+   null and the app shows an "Updating — check back soon" message instead of
+   a stale placeholder deck.
 ============================================================================= */
 
 import { supabase } from "./supabaseClient.js";
@@ -92,7 +71,7 @@ async function fetchDailyDeck() {
     const { data, error } = await supabase.from("cards").select("*");
     if (error || !data || data.length < 4) throw new Error("supabase fetch failed or pool too small");
     const shuffled = seededShuffle(data, todayISO());
-    return shuffled.slice(0, 8).map((row) => ({
+    return shuffled.slice(0, 10).map((row) => ({
       id: row.id,
       url: row.url,
       isAI: row.is_ai,
@@ -101,106 +80,9 @@ async function fetchDailyDeck() {
       verifiedYear: row.verified_year ?? undefined,
     }));
   } catch {
-    return null; // falls back to MOCK_DECK below
+    return null; // no cards available — the app will show an "updating" message
   }
 }
-
-/* -----------------------------------------------------------------------
-   IMAGE PROVENANCE — verified, not just labeled
-   -----------------------------------------------------------------------
-   Every image is served from images.unsplash.com — the one CDN that's
-   proven reliable inside this artifact sandbox. (An earlier version
-   hotlinked genuinely AI-generated images from Wikimedia Commons; that
-   broke for two independent reasons worth recording: Commons actively
-   deletes AI-generated uploads amid ongoing scope disputes, so any given
-   file can vanish without notice, and its CDN wasn't reliably reachable
-   from this sandbox to begin with.)
-
-   For the "Real" bucket, we don't just assert authenticity — we can prove
-   it. Unsplash's legacy photo URLs (images.unsplash.com/photo-<ID>-<hash>)
-   encode the upload timestamp as the ID: milliseconds since the Unix
-   epoch. Decoding it gives a hard, checkable upload date. Every real photo
-   below decodes to 2016–2018 — years before DALL·E (2021 preview, public
-   2022), Midjourney, or Stable Diffusion (both 2022) existed. That's real
-   evidence a human camera made these, not a claim.
-
-   `unsplashUploadDate()` does the decoding; `verifiedYear` on each real
-   entry is its output, and the feedback overlay surfaces it so the "proof"
-   is part of the game, not just a code comment.
-
-   The "AI" bucket remains real photographs standing in for layout/testing
-   — see the note further down on next steps for genuine AI sourcing.
------------------------------------------------------------------------ */
-function unsplashUploadDate(url) {
-  const match = url.match(/photo-(\d{13})-/);
-  if (!match) return null;
-  return new Date(Number(match[1])).getFullYear();
-}
-
-const RAW_DECK = [
-  {
-    id: "m1",
-    url: "https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1000&q=80&auto=format&fit=crop",
-    isAI: false,
-    title: "Half Dome, Yosemite Valley",
-    reason: "Real atmospheric scatter and sensor grain in the shadow detail — no diffusion smoothing here.",
-  },
-  {
-    id: "m2",
-    url: "https://image.pollinations.ai/prompt/photorealistic%20golden%20hour%20city%20skyline%2C%20dramatic%20clouds%2C%20skyscrapers%2C%20ultra%20detailed%20photograph?width=1000&height=1250&seed=42&nologo=true&model=flux",
-    isAI: true,
-    isLiveTest: true, // TEST CARD — genuinely generated via the Pollinations.ai API, not a stand-in.
-    title: "Golden Hour Skyline",
-    reason: "The window grid repeats a touch too perfectly, and the clouds bleed straight into the glass.",
-  },
-  {
-    id: "m3",
-    url: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=1000&q=80&auto=format&fit=crop",
-    isAI: false,
-    title: "Spiral Stair, Interior Study",
-    reason: "Consistent perspective lines and true depth-of-field falloff — shot on a real lens.",
-  },
-  {
-    id: "m4",
-    url: "https://images.unsplash.com/photo-1519125323398-675f0ddb6308?w=1000&q=80&auto=format&fit=crop",
-    isAI: true,
-    title: "Forest in the Mist",
-    reason: "Every trunk repeats the same bark pattern, and the fog has no single consistent light source.",
-  },
-  {
-    id: "m5",
-    url: "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=1000&q=80&auto=format&fit=crop",
-    isAI: false,
-    title: "Rain on Fifth Avenue",
-    reason: "Puddle reflections warp exactly with the pavement texture — physics doesn't lie.",
-  },
-  {
-    id: "m6",
-    url: "https://images.unsplash.com/photo-1470770903676-69b98201ea1c?w=1000&q=80&auto=format&fit=crop",
-    isAI: true,
-    title: "Alpine Lake at Dawn",
-    reason: "The reflection doesn't quite match the shoreline geometry — a dead giveaway once you look for it.",
-  },
-  {
-    id: "m7",
-    url: "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1000&q=80&auto=format&fit=crop",
-    isAI: true,
-    title: "Impossible Overlook",
-    reason: "The rock strata don't align across the cliff face, and the horizon quietly warps.",
-  },
-  {
-    id: "m8",
-    url: "https://images.unsplash.com/photo-1531123414780-f74242c2b052?w=1000&q=80&auto=format&fit=crop",
-    isAI: false,
-    title: "Portrait, Available Light",
-    reason: "Natural skin texture, asymmetrical features, and a believably imperfect background — a real sensor caught this.",
-  },
-];
-
-// Stamp verified upload years onto every real (non-AI) entry at load time.
-const MOCK_DECK = RAW_DECK.map((card) =>
-  card.isAI ? card : { ...card, verifiedYear: unsplashUploadDate(card.url) }
-);
 
 function getTier(accuracy, total) {
   if (total === 0) return { title: "No Report Filed", blurb: "Play today's set." };
@@ -267,8 +149,9 @@ function RealIcon({ size = 26, color = "#5C7B58" }) {
 }
 
 export default function SlopRadar() {
-  const [deck, setDeck] = useState(MOCK_DECK);
+  const [deck, setDeck] = useState([]);
   const [deckLoaded, setDeckLoaded] = useState(false);
+  const [deckFailed, setDeckFailed] = useState(false);
   const [introPlayed, setIntroPlayed] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState({ correct: 0, total: 0, streak: 0, bestStreak: 0 });
@@ -302,19 +185,24 @@ export default function SlopRadar() {
     soundOnRef.current = soundOn;
   }, [soundOn]);
 
-  // Attempt the real daily pipeline; fall back to mock data silently.
+  // Fetch today's deck from Supabase. No fallback deck — on failure we show
+  // an "updating" message instead of stale placeholder content.
   useEffect(() => {
     let cancelled = false;
     fetchDailyDeck().then((cards) => {
       if (cancelled) return;
-      if (cards) setDeck(cards);
-      setDeckLoaded(true);
-      // Let the fall-in animation play once for the first cards, then stop
-      // applying it to cards that mount later as the player swipes through.
-      const t = setTimeout(() => {
-        if (!cancelled) setIntroPlayed(true);
-      }, 950);
-      timers.current.push(t);
+      if (cards && cards.length > 0) {
+        setDeck(cards);
+        setDeckLoaded(true);
+        // Let the fall-in animation play once for the first cards, then stop
+        // applying it to cards that mount later as the player swipes through.
+        const t = setTimeout(() => {
+          if (!cancelled) setIntroPlayed(true);
+        }, 950);
+        timers.current.push(t);
+      } else {
+        setDeckFailed(true);
+      }
     });
     return () => {
       cancelled = true;
@@ -732,7 +620,17 @@ export default function SlopRadar() {
 
       {/* Card stack */}
       <main className="flex-1 w-full flex items-center justify-center px-5 pb-4">
-        {!deckLoaded ? (
+        {deckFailed ? (
+          <div className="w-full max-w-md text-center font-body">
+            <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
+            <p className="font-display text-lg font-semibold" style={{ color: "#332E29" }}>
+              Updating
+            </p>
+            <p className="font-body text-sm mt-1" style={{ color: "#6B655A" }}>
+              Today's set isn't ready yet — check back soon.
+            </p>
+          </div>
+        ) : !deckLoaded ? (
           <div className="w-full max-w-md text-center font-body">
             <Sparkle size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
             <p className="font-display text-lg" style={{ color: "#6B655A" }}>

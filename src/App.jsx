@@ -45,7 +45,7 @@ function todayISO() {
 }
 
 // Small deterministic PRNG (mulberry32) seeded from today's date, so every
-// player sees the same 8-card deck on the same day without needing a
+// player sees the same 10-card deck on the same day without needing a
 // separate "daily assignment" table in Supabase.
 function seededShuffle(array, seedStr) {
   let seed = 0;
@@ -65,13 +65,64 @@ function seededShuffle(array, seedStr) {
   return arr;
 }
 
+// True randomness looks "clumpy" to humans — a plain shuffle can and will
+// sometimes put 4+ real (or 4+ AI) cards back to back. This re-rolls the
+// order a handful of times, using its own deterministic seed so it's still
+// the same result for everyone on the same day, and keeps whichever
+// attempt has no run of 4+ same-type cards in a row. It deliberately only
+// tries a few times rather than searching exhaustively, so a long run
+// stays rare, not literally impossible.
+function reduceStreaks(cards, seedStr, maxRun = 3, attempts = 6) {
+  const longestRun = (arr) => {
+    let best = 1,
+      cur = 1;
+    for (let i = 1; i < arr.length; i++) {
+      cur = arr[i].isAI === arr[i - 1].isAI ? cur + 1 : 1;
+      best = Math.max(best, cur);
+    }
+    return arr.length ? best : 0;
+  };
+
+  let seed = 0;
+  for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0;
+  const rand = () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const shuffleOnce = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  let best = cards;
+  let bestRun = longestRun(cards);
+  for (let i = 0; i < attempts; i++) {
+    const candidate = shuffleOnce(cards);
+    const run = longestRun(candidate);
+    if (run < bestRun) {
+      best = candidate;
+      bestRun = run;
+    }
+    if (run <= maxRun) return candidate;
+  }
+  return best; // ran out of attempts — use the best one found, streak and all
+}
+
 async function fetchDailyDeck() {
   if (!supabase) return null; // env vars not configured yet — use mock data
   try {
     const { data, error } = await supabase.from("cards").select("*");
     if (error || !data || data.length < 4) throw new Error("supabase fetch failed or pool too small");
     const shuffled = seededShuffle(data, todayISO());
-    return shuffled.slice(0, 10).map((row) => ({
+    const daily = reduceStreaks(shuffled.slice(0, 10), todayISO() + "-order");
+    return daily.map((row) => ({
       id: row.id,
       url: row.url,
       isAI: row.is_ai,
@@ -114,38 +165,15 @@ const DEFAULT_LIFETIME = {
 // on it for slop, and a polaroid snapshot for real — read at a glance,
 // no abstraction required.
 
-function AIIcon({ size = 26, color = "#BD6A4E" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="17.1" r="5.3" fill={color} />
-      <circle cx="12" cy="12.9" r="4.1" fill={color} />
-      <circle cx="12" cy="9.3" r="2.9" fill={color} />
-      <circle cx="12.4" cy="6.5" r="1.7" fill={color} />
-      <ellipse cx="14.4" cy="16" rx="1.1" ry="1.4" fill="rgba(255,255,255,0.3)" />
-      <text
-        x="12"
-        y="19.3"
-        textAnchor="middle"
-        fontSize="7.2"
-        fontWeight="800"
-        fontFamily="'Work Sans', sans-serif"
-        fill="#FFFDF8"
-      >
-        AI
-      </text>
-    </svg>
-  );
+// Your provided artwork, auto-cropped to just the icon and made
+// transparent — /public/icons/*.png.
+
+function AIIcon({ size = 26 }) {
+  return <img src="/icons/ai-icon.png" alt="AI slop" width={size} height={size} style={{ display: "block", objectFit: "contain" }} draggable={false} />;
 }
 
-function RealIcon({ size = 26, color = "#5C7B58" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <rect x="3" y="2" width="18" height="20.5" rx="1.6" fill="#FFFEFB" stroke={color} strokeWidth="1.4" />
-      <rect x="5.3" y="4.3" width="13.4" height="10.6" rx="1" fill={color} />
-      <path d="M6.6 13.3 L9.8 9.6 L12.3 12 L14.9 8.3 L17.7 13.3 Z" fill="#FFFEFB" opacity="0.9" />
-      <circle cx="15.7" cy="7" r="1.25" fill="#FFFEFB" opacity="0.95" />
-    </svg>
-  );
+function RealIcon({ size = 26 }) {
+  return <img src="/icons/real-icon.png" alt="Real photo" width={size} height={size} style={{ display: "block", objectFit: "contain" }} draggable={false} />;
 }
 
 export default function SlopRadar() {
@@ -159,6 +187,7 @@ export default function SlopRadar() {
   const [modalOpen, setModalOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [lifetime, setLifetime] = useState(DEFAULT_LIFETIME);
@@ -404,6 +433,14 @@ export default function SlopRadar() {
     setIsDragging(false);
     if (phase !== "idle") return;
     const finalX = dragXRef.current;
+    const TAP_THRESHOLD = 6;
+    if (Math.abs(finalX) < TAP_THRESHOLD && Math.abs(drag.y) < TAP_THRESHOLD) {
+      // Barely moved — this was a tap, not a swipe. Zoom in instead of voting.
+      dragXRef.current = 0;
+      setDrag({ x: 0, y: 0 });
+      setZoomOpen(true);
+      return;
+    }
     if (Math.abs(finalX) > DRAG_THRESHOLD) {
       vote(finalX > 0 ? "real" : "ai");
     } else {
@@ -715,7 +752,7 @@ export default function SlopRadar() {
                             opacity: drag.x > 15 ? Math.min(1, dragProgress * 1.4) : 0,
                           }}
                         >
-                          <RealIcon size={16} color="#6E8E6B" strokeWidth={2} />
+                          <RealIcon size={16} />
                           REAL
                         </div>
                         <div
@@ -728,7 +765,7 @@ export default function SlopRadar() {
                             opacity: drag.x < -15 ? Math.min(1, dragProgress * 1.4) : 0,
                           }}
                         >
-                          <AIIcon size={16} color="#BD6A4E" strokeWidth={2} />
+                          <AIIcon size={16} />
                           SLOP
                         </div>
                       </>
@@ -837,7 +874,11 @@ export default function SlopRadar() {
               </li>
               <li className="flex gap-2.5">
                 <span style={{ color: "#C99A3B" }}>3.</span>
-                Eight images a day. Your streaks and accuracy carry over forever.
+                Tap the photo without dragging to zoom in for a closer look.
+              </li>
+              <li className="flex gap-2.5">
+                <span style={{ color: "#C99A3B" }}>4.</span>
+                Ten images a day. Your streaks and accuracy carry over forever.
               </li>
             </ul>
             <button
@@ -878,6 +919,36 @@ export default function SlopRadar() {
               Close
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Zoom modal — tap the photo to see it larger */}
+      {zoomOpen && currentCard && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 fade-in"
+          style={{ backgroundColor: "rgba(20,17,14,0.92)" }}
+          onClick={() => setZoomOpen(false)}
+        >
+          <img
+            src={currentCard.url}
+            alt={currentCard.title}
+            className="rounded-xl"
+            style={{ maxWidth: "92vw", maxHeight: "82dvh", objectFit: "contain", boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)" }}
+          />
+          <button
+            onClick={() => setZoomOpen(false)}
+            aria-label="Close zoomed image"
+            className="absolute top-5 right-5 rounded-full flex items-center justify-center"
+            style={{ width: 40, height: 40, backgroundColor: "rgba(255,254,251,0.15)", color: "#FBF6EC" }}
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <p
+            className="absolute bottom-6 left-0 right-0 text-center font-data"
+            style={{ color: "rgba(251,246,236,0.7)", fontSize: 11 }}
+          >
+            Tap anywhere to close
+          </p>
         </div>
       )}
 

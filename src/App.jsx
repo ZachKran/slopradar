@@ -417,12 +417,14 @@ export default function SlopRadar() {
   // Pointer (mouse/touch) drag
   const onPointerDown = (e) => {
     if (phase !== "idle") return;
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragStart.current = { x: e.clientX, y: e.clientY };
     setIsDragging(true);
   };
   const onPointerMove = (e) => {
     if (!isDragging || phase !== "idle") return;
+    e.preventDefault();
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
     dragXRef.current = dx;
@@ -563,6 +565,16 @@ export default function SlopRadar() {
         }
         .fall-in { animation: fallIn 0.7s cubic-bezier(0.32,0.9,0.36,1) both; }
         .fade-in { animation: fadeIn 0.2s ease-out; }
+        html, body {
+          overscroll-behavior: none;
+          touch-action: pan-y;
+          -webkit-text-size-adjust: 100%;
+        }
+        .no-callout {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
+        }
       `}</style>
 
       {/* Header */}
@@ -677,7 +689,7 @@ export default function SlopRadar() {
         ) : !gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)" }}
+            style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)", touchAction: "none" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;
@@ -691,7 +703,7 @@ export default function SlopRadar() {
                 >
                   <div
                     ref={isTop ? topCardRef : undefined}
-                    className="absolute inset-0 rounded-2xl p-3 flex flex-col justify-center"
+                    className="absolute inset-0 rounded-2xl p-3 flex flex-col justify-center no-callout"
                     style={{
                       backgroundColor: "#FFFEFB",
                       border: isTop ? `1.5px solid ${feedbackBorder}` : "1px solid #EDE2CE",

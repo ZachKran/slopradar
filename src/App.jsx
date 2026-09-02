@@ -569,6 +569,8 @@ export default function SlopRadar() {
           overscroll-behavior: none;
           touch-action: pan-y;
           -webkit-text-size-adjust: 100%;
+          overflow-x: hidden;
+          width: 100%;
         }
         .no-callout {
           -webkit-touch-callout: none;
@@ -689,7 +691,7 @@ export default function SlopRadar() {
         ) : !gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)", touchAction: "none" }}
+            style={{ width: "min(92vw, 60vh, 460px)", height: "min(92vw, 60vh, 460px)", touchAction: "none" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;
@@ -909,7 +911,7 @@ export default function SlopRadar() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-5 fade-in" style={{ backgroundColor: "rgba(51,46,41,0.45)" }}>
           <div
             className="w-full max-w-sm rounded-2xl p-7 rise-in overflow-y-auto"
-            style={{ backgroundColor: "#FFFEFB", border: "1px solid #EDE2CE", boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)", maxHeight: "80dvh" }}
+            style={{ backgroundColor: "#FFFEFB", border: "1px solid #EDE2CE", boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)", maxHeight: "80vh" }}
           >
             <h2 className="font-display text-xl font-semibold text-center mb-4" style={{ color: "#332E29" }}>
               Privacy Policy
@@ -945,7 +947,7 @@ export default function SlopRadar() {
             src={currentCard.url}
             alt={currentCard.title}
             className="rounded-xl"
-            style={{ maxWidth: "92vw", maxHeight: "82dvh", objectFit: "contain", boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)" }}
+            style={{ maxWidth: "92vw", maxHeight: "82vh", objectFit: "contain", boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)" }}
           />
           <button
             onClick={() => setZoomOpen(false)}
@@ -973,7 +975,7 @@ export default function SlopRadar() {
               backgroundColor: "#FFFEFB",
               border: "1px solid #EDE2CE",
               boxShadow: "0 24px 60px -20px rgba(40,30,10,0.35)",
-              maxHeight: "90dvh",
+              maxHeight: "90vh",
             }}
           >
             {gameOver ? (
@@ -1124,7 +1126,7 @@ function RevealRail({ label, color, cards, side }) {
   const ROW_MAX = 150; // px — caps square size when a side has very few rows
   const rowHeight =
     rows.length > 0
-      ? `min(calc((92dvh - ${LABEL_BLOCK}px - ${(rows.length - 1) * ROW_GAP}px) / ${rows.length}), ${ROW_MAX}px)`
+      ? `min(calc((92vh - ${LABEL_BLOCK}px - ${(rows.length - 1) * ROW_GAP}px) / ${rows.length}), ${ROW_MAX}px)`
       : "0px";
 
   return (
@@ -1136,7 +1138,7 @@ function RevealRail({ label, color, cards, side }) {
         top: "50%",
         transform: "translateY(-50%)",
         zIndex: 51,
-        height: "92dvh",
+        height: "92vh",
         width: ROW_MAX * 2 + ROW_GAP,
       }}
     >

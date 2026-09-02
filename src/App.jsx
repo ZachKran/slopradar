@@ -145,6 +145,7 @@ function getTier(accuracy, total) {
 }
 
 const DRAG_THRESHOLD = 110;
+const TAP_THRESHOLD = 6; // below this much movement, a touch/click counts as a tap, not a swipe
 const VISIBLE_STACK = 3;
 const LIFETIME_KEY = "slop-radar-lifetime-stats";
 const INTRO_KEY = "slop-radar-seen-intro";
@@ -414,8 +415,15 @@ export default function SlopRadar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [vote, gameOver]);
 
-  // Pointer (mouse/touch) drag
+  // Pointer drag — MOUSE AND PEN ONLY. Touch is handled by a completely
+  // separate, dedicated implementation below (see "Touch drag — mobile").
+  // Pointer Events unify mouse/pen/touch into one API, but relying on that
+  // unification for touch specifically caused real, hard-to-track bugs on
+  // phones (see the dedicated touch effect for why). Splitting them into
+  // two independent code paths, each simple and specific to its input
+  // type, is deliberate.
   const onPointerDown = (e) => {
+    if (e.pointerType === "touch") return;
     if (phase !== "idle") return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -423,6 +431,7 @@ export default function SlopRadar() {
     setIsDragging(true);
   };
   const onPointerMove = (e) => {
+    if (e.pointerType === "touch") return;
     if (!isDragging || phase !== "idle") return;
     e.preventDefault();
     const dx = e.clientX - dragStart.current.x;
@@ -430,12 +439,12 @@ export default function SlopRadar() {
     dragXRef.current = dx;
     setDrag({ x: dx, y: dy * 0.35 });
   };
-  const endPointerDrag = () => {
+  const endPointerDrag = (e) => {
+    if (e && e.pointerType === "touch") return;
     if (!isDragging) return;
     setIsDragging(false);
     if (phase !== "idle") return;
     const finalX = dragXRef.current;
-    const TAP_THRESHOLD = 6;
     if (Math.abs(finalX) < TAP_THRESHOLD && Math.abs(drag.y) < TAP_THRESHOLD) {
       // Barely moved — this was a tap, not a swipe. Zoom in instead of voting.
       dragXRef.current = 0;
@@ -450,6 +459,77 @@ export default function SlopRadar() {
       setDrag({ x: 0, y: 0 });
     }
   };
+
+  // Touch drag — mobile. Built from scratch as native touch listeners
+  // rather than relying on Pointer Events for touch input, for a concrete
+  // reason: React's synthetic touch handling (and, on some mobile browser/
+  // React combinations, its pointer handling too) attaches listeners as
+  // passive by default for scroll-performance reasons. A passive listener
+  // silently ignores preventDefault() — the call doesn't throw, it just
+  // does nothing — which is exactly the kind of bug that looks like
+  // "sometimes glitchy" rather than "always broken." Attaching the
+  // listeners manually via addEventListener with { passive: false } is the
+  // only way to guarantee preventDefault actually takes effect on every
+  // browser. This block owns its own state entirely — it does not read or
+  // write dragStart/isDragging/anything from the mouse path above.
+  const touchState = useRef({ active: false, startX: 0, startY: 0, dx: 0, dy: 0 });
+
+  useEffect(() => {
+    const el = topCardRef.current;
+    if (!el) return;
+
+    function onTouchStart(e) {
+      if (phase !== "idle") return;
+      const t = e.touches[0];
+      touchState.current = { active: true, startX: t.clientX, startY: t.clientY, dx: 0, dy: 0 };
+      setIsDragging(true);
+    }
+
+    function onTouchMove(e) {
+      const s = touchState.current;
+      if (!s.active || phase !== "idle") return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const dx = t.clientX - s.startX;
+      const dy = t.clientY - s.startY;
+      s.dx = dx;
+      s.dy = dy;
+      dragXRef.current = dx;
+      setDrag({ x: dx, y: dy * 0.35 });
+    }
+
+    function onTouchEnd() {
+      const s = touchState.current;
+      if (!s.active) return;
+      s.active = false;
+      setIsDragging(false);
+      if (phase !== "idle") return;
+      const { dx, dy } = s;
+      if (Math.abs(dx) < TAP_THRESHOLD && Math.abs(dy) < TAP_THRESHOLD) {
+        dragXRef.current = 0;
+        setDrag({ x: 0, y: 0 });
+        setZoomOpen(true);
+        return;
+      }
+      if (Math.abs(dx) > DRAG_THRESHOLD) {
+        vote(dx > 0 ? "real" : "ai");
+      } else {
+        dragXRef.current = 0;
+        setDrag({ x: 0, y: 0 });
+      }
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [phase, vote]);
 
   // Trackpad / mouse-wheel swipe — two-finger trackpad swipes (Mac) behave
   // just like a drag.

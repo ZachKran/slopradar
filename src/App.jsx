@@ -147,7 +147,7 @@ function getTier(accuracy, total) {
 // Bump this string every time this file is shipped, so it's visible on
 // screen (see the footer) whether a deployed site is actually running the
 // latest version or a stale cached build.
-const APP_VERSION = "2026-09-02 22:14 UTC";
+const APP_VERSION = "2026-09-03 00:47 UTC";
 
 const DRAG_THRESHOLD = 110;
 const TAP_THRESHOLD = 6; // below this much movement, a touch/click counts as a tap, not a swipe
@@ -534,7 +534,7 @@ export default function SlopRadar() {
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [phase, vote]);
+  }, [phase, vote, currentIndex]);
 
   // Trackpad / mouse-wheel swipe — two-finger trackpad swipes (Mac) behave
   // just like a drag.
@@ -567,7 +567,7 @@ export default function SlopRadar() {
       el.removeEventListener("wheel", onWheelNative);
       clearTimeout(wheelTimeout.current);
     };
-  }, [phase, vote]);
+  }, [phase, vote, currentIndex]);
 
   const rotation = Math.max(-14, Math.min(14, drag.x / 14));
   const dragProgress = Math.min(1, Math.abs(drag.x) / DRAG_THRESHOLD);
@@ -660,6 +660,14 @@ export default function SlopRadar() {
           -webkit-user-select: none;
           user-select: none;
         }
+        .logo-title { font-size: 30px; }
+        .day-label { font-size: 15px; }
+        .game-caption { font-size: 13px; }
+        @media (min-width: 640px) {
+          .logo-title { font-size: 20px; }
+          .day-label { font-size: 10px; }
+          .game-caption { font-size: 10px; }
+        }
       `}</style>
 
       {/* Header */}
@@ -670,10 +678,10 @@ export default function SlopRadar() {
               <Newspaper size={17} style={{ color: "#B8863B" }} />
             </div>
             <div>
-              <h1 className="font-display text-xl font-semibold leading-tight" style={{ color: "#332E29" }}>
+              <h1 className="font-display font-semibold leading-tight logo-title" style={{ color: "#332E29" }}>
                 Slop Radar
               </h1>
-              <p className="font-data tracking-wide" style={{ color: "#9C9285", fontSize: 10 }}>
+              <p className="font-data tracking-wide day-label" style={{ color: "#9C9285" }}>
                 DAY #{dayNumber}
               </p>
             </div>
@@ -742,7 +750,7 @@ export default function SlopRadar() {
                 );
               })}
             </div>
-            <p className="font-data text-center" style={{ color: "#9C9285", fontSize: 10 }}>
+            <p className="font-data text-center game-caption" style={{ color: "#9C9285" }}>
               {Math.min(currentIndex + 1, deck.length)} OF {deck.length} &middot; ACCURACY{" "}
               <span style={{ color: "#6E8E6B" }} className="font-semibold">
                 {score.total > 0 ? `${accuracy}%` : "\u2014"}
@@ -753,7 +761,7 @@ export default function SlopRadar() {
       </header>
 
       {/* Card stack */}
-      <main className="flex-1 w-full flex items-center justify-center px-3 pb-2">
+      <main className="flex-1 w-full min-h-0 flex items-center justify-center px-2 pb-1.5" style={{ containerType: "size" }}>
         {deckFailed ? (
           <div className="w-full max-w-md text-center font-body">
             <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
@@ -774,7 +782,7 @@ export default function SlopRadar() {
         ) : !gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(97vw, 76dvh, 520px)", height: "min(97vw, 76dvh, 520px)", touchAction: "none" }}
+            style={{ width: "min(100cqw, 100cqh, 520px)", height: "min(100cqw, 100cqh, 520px)", touchAction: "none" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;

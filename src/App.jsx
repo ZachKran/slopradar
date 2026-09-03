@@ -144,6 +144,11 @@ function getTier(accuracy, total) {
   return { title: "Absolute Rookie", blurb: "Everyone Starts Somewhere." };
 }
 
+// Bump this string every time this file is shipped, so it's visible on
+// screen (see the footer) whether a deployed site is actually running the
+// latest version or a stale cached build.
+const APP_VERSION = "2026-09-02 22:14 UTC";
+
 const DRAG_THRESHOLD = 110;
 const TAP_THRESHOLD = 6; // below this much movement, a touch/click counts as a tap, not a swipe
 const VISIBLE_STACK = 3;
@@ -658,8 +663,8 @@ export default function SlopRadar() {
       `}</style>
 
       {/* Header */}
-      <header className="w-full px-6 pt-8 pb-4 font-body" style={{ borderBottom: "1px solid #EDE2CE", maxWidth: 420 }}>
-        <div className="flex items-center justify-between mb-4">
+      <header className="w-full px-4 pt-4 pb-2.5 font-body" style={{ borderBottom: "1px solid #EDE2CE", maxWidth: 420 }}>
+        <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#EFE3CE" }}>
               <Newspaper size={17} style={{ color: "#B8863B" }} />
@@ -673,30 +678,30 @@ export default function SlopRadar() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               onClick={toggleSound}
               aria-label={soundOn ? "Mute sound" : "Unmute sound"}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition"
+              className="w-11 h-11 rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
             <button
               onClick={openHelp}
               aria-label="How to play"
-              className="w-8 h-8 rounded-full flex items-center justify-center transition"
+              className="w-11 h-11 rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              <HelpCircle size={14} />
+              <HelpCircle size={16} />
             </button>
             <button
               onClick={openStats}
               aria-label="View stats"
-              className="w-8 h-8 rounded-full flex items-center justify-center transition"
+              className="w-11 h-11 rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              <BarChart2 size={14} />
+              <BarChart2 size={16} />
             </button>
             <div
               className="flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full ml-0.5"
@@ -710,7 +715,7 @@ export default function SlopRadar() {
 
         {!gameOver && (
           <>
-            <div className="flex items-center justify-center gap-1.5 mb-2">
+            <div className="flex items-center justify-center gap-1.5 mb-1.5">
               {deck.map((item, i) => {
                 const h = i < history.length ? history[i] : null;
                 const isCurrent = i === currentIndex && phase === "idle";
@@ -748,7 +753,7 @@ export default function SlopRadar() {
       </header>
 
       {/* Card stack */}
-      <main className="flex-1 w-full flex items-center justify-center px-5 pb-4">
+      <main className="flex-1 w-full flex items-center justify-center px-3 pb-2">
         {deckFailed ? (
           <div className="w-full max-w-md text-center font-body">
             <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
@@ -769,7 +774,7 @@ export default function SlopRadar() {
         ) : !gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(92vw, 60dvh, 460px)", height: "min(92vw, 60dvh, 460px)", touchAction: "none" }}
+            style={{ width: "min(97vw, 76dvh, 520px)", height: "min(97vw, 76dvh, 520px)", touchAction: "none" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;
@@ -899,7 +904,7 @@ export default function SlopRadar() {
 
       {/* Action buttons */}
       {!gameOver && (
-        <footer className="w-full max-w-md px-6 pb-6 pt-1 flex items-center justify-center gap-10 font-body">
+        <footer className="w-full max-w-md px-6 pb-4 pt-0.5 flex items-center justify-center gap-10 font-body">
           <button
             onClick={() => vote("ai")}
             disabled={phase !== "idle"}
@@ -943,6 +948,7 @@ export default function SlopRadar() {
         >
           Privacy Policy
         </button>
+        <span style={{ color: "#C9BB9C", fontSize: 10 }}> · v{APP_VERSION}</span>
       </p>
 
       {/* How to Play modal */}

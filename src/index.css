@@ -1,3 +1,165 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --bg: #05080a;
+  --surface: #0d1416;
+  --surface-alt: #121b1e;
+  --border: #1c282a;
+  --border-strong: #2a3a3d;
+  --text: #eaf3f0;
+  --text-dim: #7e938f;
+  --text-faint: #4a5658;
+  --accent: #4fe3d1;
+  --accent-dim: rgba(79, 227, 209, 0.14);
+  --real: #3ed598;
+  --real-dim: rgba(62, 213, 152, 0.14);
+  --ai: #ff6b4d;
+  --ai-dim: rgba(255, 107, 77, 0.14);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  overscroll-behavior: none;
+  touch-action: pan-y;
+  -webkit-text-size-adjust: 100%;
+}
+
+.font-display {
+  font-family: "Space Grotesk", sans-serif;
+}
+.font-body {
+  font-family: "Inter", sans-serif;
+}
+.font-mono {
+  font-family: "JetBrains Mono", monospace;
+}
+
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.bg-scanlines {
+  background-image: repeating-linear-gradient(rgba(79, 227, 209, 0.05) 0px, rgba(79, 227, 209, 0.05) 1px, transparent 1px, transparent 3px);
+}
+
+.bg-radar-grid {
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+
+@keyframes materialize {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(14px);
+    filter: brightness(1.6) saturate(0.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: brightness(1) saturate(1);
+  }
+}
+.materialize {
+  animation: materialize 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-up {
+  animation: sheetUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.scrim-in {
+  animation: scrimIn 0.18s ease-out both;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+@keyframes blipIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.blip-in {
+  animation: blipIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes sweepFlash {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+.sweep-flash {
+  position: relative;
+  overflow: hidden;
+}
+.sweep-flash::after {
+  content: "";
+  position: absolute;
+  inset: -20% -20%;
+  background: linear-gradient(100deg, transparent 42%, rgba(255, 255, 255, 0.14) 50%, transparent 58%);
+  animation: sweepFlash 0.55s ease-out;
+  pointer-events: none;
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.pulse-dot {
+  animation: pulseDot 1.4s ease-in-out infinite;
+}

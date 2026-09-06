@@ -532,15 +532,17 @@ export default function SlopRadar() {
         }
         .logo-title { font-size: 30px; line-height: 1; overflow-wrap: anywhere; }
         .day-label { font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
-        .game-caption { font-size: 30px; }
+        .game-caption { font-size: 20px; }
         .header-icon-btn { width: 88px; height: 88px; }
         .header-icon { width: 32px; height: 32px; }
+        .mobile-badge { display: inline; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
-          .game-caption { font-size: 40px; }
+          .game-caption { font-size: 26px; }
           .header-icon-btn { width: 44px; height: 44px; }
           .header-icon { width: 16px; height: 16px; }
+          .mobile-badge { display: none; }
         }
         @media (max-width: 639px) {
           .review-modal { width: 96vw; }
@@ -558,7 +560,13 @@ export default function SlopRadar() {
             </div>
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
               <h1 className="font-display font-semibold leading-tight logo-title" style={{ color: "#332E29" }}>
-                Slop Radar
+                Slop Radar{" "}
+                <span
+                  className="mobile-badge font-body font-normal align-middle"
+                  style={{ fontSize: 12, color: "#B8863B", border: "1px solid #B8863B", borderRadius: 999, padding: "2px 8px", verticalAlign: "middle" }}
+                >
+                  Mobile
+                </span>
               </h1>
               <p className="font-data tracking-wide day-label" style={{ color: "#9C9285" }}>
                 DAY #{dayNumber}

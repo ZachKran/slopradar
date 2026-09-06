@@ -209,6 +209,25 @@ export default function SlopRadar() {
   const audioCtxRef = useRef(null);
   const hasCommittedRef = useRef(false);
 
+  // Square card-stack size in px, measured from the surrounding <main>.
+  // (Not done with CSS container query units — `container-type: size` on a
+  // flex-grow-sized ancestor resolves cqw/cqh to 0 in current Chromium, which
+  // was collapsing the whole card stack, images included, to nothing.)
+  const cardAreaRef = useRef(null);
+  const [cardAreaSize, setCardAreaSize] = useState(0);
+  useEffect(() => {
+    const el = cardAreaRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setCardAreaSize(Math.min(rect.width, rect.height, 650));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   useEffect(() => {
     soundOnRef.current = soundOn;
@@ -511,12 +530,12 @@ export default function SlopRadar() {
           -webkit-user-select: none;
           user-select: none;
         }
-        .logo-title { font-size: 150px; line-height: 1; overflow-wrap: anywhere; }
-        .day-label { font-size: 75px; line-height: 1.15; overflow-wrap: anywhere; }
+        .logo-title { font-size: 30px; line-height: 1; overflow-wrap: anywhere; }
+        .day-label { font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
         .game-caption { font-size: 13px; }
         @media (min-width: 640px) {
-          .logo-title { font-size: 20px; }
-          .day-label { font-size: 10px; }
+          .logo-title { font-size: 40px; }
+          .day-label { font-size: 20px; }
           .game-caption { font-size: 10px; }
         }
         @media (max-width: 639px) {
@@ -617,7 +636,7 @@ export default function SlopRadar() {
       </header>
 
       {/* Card stack */}
-      <main className="flex-1 w-full min-h-0 flex items-center justify-center px-0 sm:px-2 pb-1.5" style={{ containerType: "size" }}>
+      <main ref={cardAreaRef} className="flex-1 w-full min-h-0 flex items-center justify-center px-0 sm:px-2 pb-1.5">
         {deckFailed ? (
           <div className="w-full max-w-md text-center font-body">
             <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
@@ -638,7 +657,7 @@ export default function SlopRadar() {
         ) : !gameOver ? (
           <div
             className="relative"
-            style={{ width: "min(100cqw, 100cqh, 650px)", height: "min(100cqw, 100cqh, 650px)", touchAction: "none" }}
+            style={{ width: cardAreaSize || "100%", height: cardAreaSize || "100%", touchAction: "none" }}
           >
             {deck.slice(currentIndex, currentIndex + VISIBLE_STACK).map((item, offset) => {
               const isTop = offset === 0;

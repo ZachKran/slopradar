@@ -532,11 +532,15 @@ export default function SlopRadar() {
         }
         .logo-title { font-size: 30px; line-height: 1; overflow-wrap: anywhere; }
         .day-label { font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
-        .game-caption { font-size: 13px; }
+        .game-caption { font-size: 30px; }
+        .header-icon-btn { width: 88px; height: 88px; }
+        .header-icon { width: 32px; height: 32px; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
-          .game-caption { font-size: 10px; }
+          .game-caption { font-size: 40px; }
+          .header-icon-btn { width: 44px; height: 44px; }
+          .header-icon { width: 16px; height: 16px; }
         }
         @media (max-width: 639px) {
           .review-modal { width: 96vw; }
@@ -547,7 +551,7 @@ export default function SlopRadar() {
 
       {/* Header */}
       <header className="w-full px-4 pt-2 pb-1.5 sm:pt-4 sm:pb-2.5 font-body" style={{ borderBottom: "1px solid #EDE2CE", maxWidth: 420 }}>
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-2.5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#EFE3CE" }}>
               <Newspaper size={17} style={{ color: "#B8863B" }} />
@@ -561,30 +565,30 @@ export default function SlopRadar() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center justify-end gap-1">
             <button
               onClick={toggleSound}
               aria-label={soundOn ? "Mute sound" : "Unmute sound"}
-              className="w-11 h-11 rounded-full flex items-center justify-center transition"
+              className="header-icon-btn rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {soundOn ? <Volume2 className="header-icon" /> : <VolumeX className="header-icon" />}
             </button>
             <button
               onClick={openHelp}
               aria-label="How to play"
-              className="w-11 h-11 rounded-full flex items-center justify-center transition"
+              className="header-icon-btn rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              <HelpCircle size={16} />
+              <HelpCircle className="header-icon" />
             </button>
             <button
               onClick={openStats}
               aria-label="View stats"
-              className="w-11 h-11 rounded-full flex items-center justify-center transition"
+              className="header-icon-btn rounded-full flex items-center justify-center transition"
               style={{ color: "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              <BarChart2 size={16} />
+              <BarChart2 className="header-icon" />
             </button>
             <div
               className="flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full ml-0.5"
@@ -636,7 +640,7 @@ export default function SlopRadar() {
       </header>
 
       {/* Card stack */}
-      <main ref={cardAreaRef} className="flex-1 w-full min-h-0 flex items-center justify-center px-0 sm:px-2 pb-1.5">
+      <main ref={cardAreaRef} className="flex-1 w-full min-h-0 flex items-center justify-center px-0 sm:px-2 pb-1.5" style={{ maxWidth: 420 }}>
         {deckFailed ? (
           <div className="w-full max-w-md text-center font-body">
             <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />

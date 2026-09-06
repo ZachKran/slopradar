@@ -24,6 +24,21 @@ export function useSwipeGesture({ disabled, onCommit, onTap }) {
   const delta = useRef({ x: 0, y: 0 });
   const wheelDx = useRef(0);
   const wheelTimer = useRef(null);
+  const rafId = useRef(null);
+
+  // Touch fires pointermove far more often than the screen can repaint, so
+  // setState-per-event was queuing more React re-renders than a mobile
+  // device can keep up with, which read as choppy dragging. Mouse/pen
+  // dragging isn't affected by this — it's low-frequency enough already —
+  // so only touch input is coalesced to one state update per animation
+  // frame here.
+  const scheduleDrag = useCallback(() => {
+    if (rafId.current != null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
+      setDrag({ x: delta.current.x, y: delta.current.y * 0.3 });
+    });
+  }, []);
 
   const reset = useCallback(() => {
     delta.current = { x: 0, y: 0 };
@@ -61,22 +76,37 @@ export function useSwipeGesture({ disabled, onCommit, onTap }) {
       const dx = e.clientX - start.current.x;
       const dy = e.clientY - start.current.y;
       delta.current = { x: dx, y: dy };
-      setDrag({ x: dx, y: dy * 0.3 });
+      if (e.pointerType === "touch") {
+        scheduleDrag();
+      } else {
+        setDrag({ x: dx, y: dy * 0.3 });
+      }
     },
-    [disabled, dragging]
+    [disabled, dragging, scheduleDrag]
   );
+
+  const cancelScheduledDrag = useCallback(() => {
+    if (rafId.current != null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+  }, []);
 
   const onPointerUp = useCallback(() => {
     if (!dragging) return;
+    cancelScheduledDrag();
     setDragging(false);
     settle();
-  }, [dragging, settle]);
+  }, [dragging, settle, cancelScheduledDrag]);
 
   const onPointerCancel = useCallback(() => {
     if (!dragging) return;
+    cancelScheduledDrag();
     setDragging(false);
     reset();
-  }, [dragging, reset]);
+  }, [dragging, reset, cancelScheduledDrag]);
+
+  useEffect(() => () => cancelScheduledDrag(), [cancelScheduledDrag]);
 
   useEffect(() => {
     const el = elRef.current;

@@ -583,10 +583,13 @@ export default function SlopRadar() {
            width — a phone with "Request Desktop Site" on still has a mouse-
            free, coarse-pointer screen, so it should still get the larger
            touch targets. */
-        .is-mobile .header-icon-btn { width: 176px; height: 176px; }
-        .is-mobile .header-icon { width: 64px; height: 64px; }
-        .is-mobile .answer-btn { width: 272px; height: 272px; }
-        .is-mobile .answer-icon { width: 112px; height: 112px; }
+        .is-mobile .header-icon-btn { width: 132px; height: 132px; }
+        .is-mobile .header-icon { width: 48px; height: 48px; }
+        .is-mobile .answer-btn { width: 204px; height: 204px; }
+        .is-mobile .answer-icon { width: 84px; height: 84px; }
+        .is-mobile .streak-chip { width: 132px; height: 132px; padding: 0; justify-content: center; gap: 4px; }
+        .is-mobile .streak-chip .streak-icon { width: 48px; height: 48px; }
+        .is-mobile .streak-chip .streak-count { font-size: 32px; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
@@ -649,11 +652,11 @@ export default function SlopRadar() {
               <BarChart2 className="header-icon" />
             </button>
             <div
-              className="flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full"
+              className="streak-chip flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full"
               style={{ color: score.streak > 0 ? "#B8863B" : "#9C9285", backgroundColor: "#F2E9D8" }}
             >
-              <Flame size={13} />
-              {score.streak}
+              <Flame className="streak-icon" size={13} />
+              <span className="streak-count">{score.streak}</span>
             </div>
           </div>
         </div>
@@ -744,6 +747,7 @@ export default function SlopRadar() {
                         : "transform 0.32s cubic-bezier(0.22,1,0.36,1)",
                       touchAction: "none",
                       cursor: isTop ? (isDragging ? "grabbing" : "grab") : "default",
+                      willChange: isTop && isMobile && isDragging ? "transform" : undefined,
                     }}
                     onPointerDown={isTop ? gesture.bind.onPointerDown : undefined}
                     onPointerMove={isTop ? gesture.bind.onPointerMove : undefined}

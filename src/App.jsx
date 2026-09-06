@@ -174,12 +174,32 @@ const DEFAULT_LIFETIME = {
 // Your provided artwork, auto-cropped to just the icon and made
 // transparent — /public/icons/*.png.
 
-function AIIcon({ size = 26 }) {
-  return <img src="/icons/ai-icon.png" alt="AI slop" width={size} height={size} style={{ display: "block", objectFit: "contain" }} draggable={false} />;
+function AIIcon({ size = 26, className }) {
+  return (
+    <img
+      src="/icons/ai-icon.png"
+      alt="AI slop"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: "block", objectFit: "contain" }}
+      draggable={false}
+    />
+  );
 }
 
-function RealIcon({ size = 26 }) {
-  return <img src="/icons/real-icon.png" alt="Real photo" width={size} height={size} style={{ display: "block", objectFit: "contain" }} draggable={false} />;
+function RealIcon({ size = 26, className }) {
+  return (
+    <img
+      src="/icons/real-icon.png"
+      alt="Real photo"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: "block", objectFit: "contain" }}
+      draggable={false}
+    />
+  );
 }
 
 export default function SlopRadar() {
@@ -213,6 +233,10 @@ export default function SlopRadar() {
   // (Not done with CSS container query units — `container-type: size` on a
   // flex-grow-sized ancestor resolves cqw/cqh to 0 in current Chromium, which
   // was collapsing the whole card stack, images included, to nothing.)
+  // Sized off width only, not height: <main> no longer has min-h-0, so its
+  // height now follows the card (content-based) instead of the other way
+  // around — measuring rect.height here would create a circular loop that
+  // settles on 0 the moment the header grows taller than the viewport.
   const cardAreaRef = useRef(null);
   const [cardAreaSize, setCardAreaSize] = useState(0);
   useEffect(() => {
@@ -220,7 +244,7 @@ export default function SlopRadar() {
     if (!el) return;
     const update = () => {
       const rect = el.getBoundingClientRect();
-      setCardAreaSize(Math.min(rect.width, rect.height, 650));
+      setCardAreaSize(Math.min(rect.width, 650));
     };
     update();
     const ro = new ResizeObserver(update);
@@ -516,7 +540,10 @@ export default function SlopRadar() {
     phase === "feedback" && feedback ? (feedback.correct ? "#6E8E6B" : "#BD6A4E") : "#EDE2CE";
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center relative" style={{ backgroundColor: "#FBF6EC" }}>
+    <div
+      className={`min-h-screen w-full flex flex-col items-center relative${isMobile ? " is-mobile" : ""}`}
+      style={{ backgroundColor: "#FBF6EC" }}
+    >
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
         .font-display { font-family: 'Fraunces', serif; }
@@ -548,14 +575,22 @@ export default function SlopRadar() {
         .logo-title { font-size: 30px; line-height: 1; overflow-wrap: anywhere; }
         .day-label { font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
         .game-caption { font-size: 20px; }
-        .header-icon-btn { width: 88px; height: 88px; }
-        .header-icon { width: 32px; height: 32px; }
+        .header-icon-btn { width: 44px; height: 44px; }
+        .header-icon { width: 16px; height: 16px; }
+        .answer-btn { width: 68px; height: 68px; }
+        .answer-icon { width: 28px; height: 28px; }
+        /* Sized off touch/pointer input (see isMobile above), not viewport
+           width — a phone with "Request Desktop Site" on still has a mouse-
+           free, coarse-pointer screen, so it should still get the larger
+           touch targets. */
+        .is-mobile .header-icon-btn { width: 176px; height: 176px; }
+        .is-mobile .header-icon { width: 64px; height: 64px; }
+        .is-mobile .answer-btn { width: 272px; height: 272px; }
+        .is-mobile .answer-icon { width: 112px; height: 112px; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
           .game-caption { font-size: 26px; }
-          .header-icon-btn { width: 44px; height: 44px; }
-          .header-icon { width: 16px; height: 16px; }
         }
         @media (max-width: 639px) {
           .review-modal { width: 96vw; }
@@ -565,15 +600,12 @@ export default function SlopRadar() {
       `}</style>
 
       {/* Header */}
-      <header className="w-full px-4 pt-2 pb-1.5 sm:pt-4 sm:pb-2.5 font-body" style={{ borderBottom: "1px solid #EDE2CE", maxWidth: 420 }}>
+      <header className="w-full px-4 pt-2 pb-1.5 sm:pt-4 sm:pb-2.5 font-body" style={{ borderBottom: "1px solid #EDE2CE", maxWidth: isMobile ? 720 : 420 }}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#EFE3CE" }}>
-              <Newspaper size={17} style={{ color: "#B8863B" }} />
-            </div>
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
               <h1 className="font-display font-semibold leading-tight logo-title" style={{ color: "#332E29" }}>
-                Slop Radar
+                <span style={{ whiteSpace: "nowrap" }}>Slop Radar</span>
                 {isMobile && (
                   <>
                     {" "}
@@ -591,7 +623,7 @@ export default function SlopRadar() {
               </p>
             </div>
           </div>
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center flex-wrap justify-center sm:justify-end gap-3 sm:gap-1">
             <button
               onClick={toggleSound}
               aria-label={soundOn ? "Mute sound" : "Unmute sound"}
@@ -617,7 +649,7 @@ export default function SlopRadar() {
               <BarChart2 className="header-icon" />
             </button>
             <div
-              className="flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full ml-0.5"
+              className="flex items-center gap-1.5 font-data text-xs px-2.5 py-1.5 rounded-full"
               style={{ color: score.streak > 0 ? "#B8863B" : "#9C9285", backgroundColor: "#F2E9D8" }}
             >
               <Flame size={13} />
@@ -666,7 +698,7 @@ export default function SlopRadar() {
       </header>
 
       {/* Card stack */}
-      <main ref={cardAreaRef} className="flex-1 w-full min-h-0 flex items-center justify-center px-0 sm:px-2 pb-1.5" style={{ maxWidth: 420 }}>
+      <main ref={cardAreaRef} className="flex-1 w-full flex items-center justify-center px-0 sm:px-2 pb-1.5" style={{ maxWidth: isMobile ? 720 : 420 }}>
         {deckFailed ? (
           <div className="w-full max-w-md text-center font-body">
             <Newspaper size={26} style={{ color: "#C99A3B" }} className="mx-auto mb-3" />
@@ -817,38 +849,37 @@ export default function SlopRadar() {
 
       {/* Action buttons */}
       {!gameOver && (
-        <footer className="w-full max-w-md px-6 pb-2 pt-0 sm:pb-4 sm:pt-0.5 flex items-center justify-center gap-10 font-body">
+        <footer
+          className="w-full px-6 pb-2 pt-0 sm:pb-4 sm:pt-0.5 flex flex-wrap items-center justify-center gap-6 font-body"
+          style={{ maxWidth: isMobile ? 720 : 448 }}
+        >
           <button
             onClick={() => vote("ai")}
             disabled={phase !== "idle"}
             aria-label="Mark as AI Slop"
-            className="rounded-full flex items-center justify-center transition disabled:opacity-40 active:scale-95 hover:-translate-y-0.5"
+            className="answer-btn rounded-full flex items-center justify-center transition disabled:opacity-40 active:scale-95 hover:-translate-y-0.5"
             style={{
               backgroundColor: "#FFFEFB",
               border: "2px solid #E3B8A4",
               color: "#BD6A4E",
               boxShadow: "0 6px 16px -8px rgba(189,106,78,0.35)",
-              width: 68,
-              height: 68,
             }}
           >
-            <AIIcon size={28} />
+            <AIIcon size={28} className="answer-icon" />
           </button>
           <button
             onClick={() => vote("real")}
             disabled={phase !== "idle"}
             aria-label="Mark as Real Photo"
-            className="rounded-full flex items-center justify-center transition disabled:opacity-40 active:scale-95 hover:-translate-y-0.5"
+            className="answer-btn rounded-full flex items-center justify-center transition disabled:opacity-40 active:scale-95 hover:-translate-y-0.5"
             style={{
               backgroundColor: "#FFFEFB",
               border: "2px solid #B7CAB2",
               color: "#5C7B58",
               boxShadow: "0 6px 16px -8px rgba(92,123,88,0.35)",
-              width: 68,
-              height: 68,
             }}
           >
-            <RealIcon size={28} />
+            <RealIcon size={28} className="answer-icon" />
           </button>
         </footer>
       )}
@@ -857,11 +888,11 @@ export default function SlopRadar() {
         <button
           onClick={() => setShowPrivacy(true)}
           className="underline"
-          style={{ color: "#C9BB9C", fontSize: 10, background: "none", border: "none", cursor: "pointer" }}
+          style={{ color: "#C9BB9C", fontSize: isMobile ? 20 : 10, background: "none", border: "none", cursor: "pointer" }}
         >
           Privacy Policy
         </button>
-        <span style={{ color: "#C9BB9C", fontSize: 10 }}> · v{APP_VERSION}</span>
+        <span style={{ color: "#C9BB9C", fontSize: isMobile ? 20 : 10 }}> · v{APP_VERSION}</span>
       </p>
 
       {/* How to Play modal */}

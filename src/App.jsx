@@ -228,6 +228,21 @@ export default function SlopRadar() {
     return () => ro.disconnect();
   }, []);
 
+  // "Mobile" badge detection. A CSS width breakpoint isn't reliable here —
+  // it reports "desktop" on a phone that has "Request Desktop Site" turned
+  // on, since that mode reports a wide layout viewport too. Touch capability
+  // and coarse-pointer/no-hover input survive that mode, since the hardware
+  // is still a touchscreen either way, so use those instead.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const hasTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window;
+    const update = () => setIsMobile(mq.matches || hasTouch);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   useEffect(() => {
     soundOnRef.current = soundOn;
@@ -535,14 +550,12 @@ export default function SlopRadar() {
         .game-caption { font-size: 20px; }
         .header-icon-btn { width: 88px; height: 88px; }
         .header-icon { width: 32px; height: 32px; }
-        .mobile-badge { display: inline; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
           .game-caption { font-size: 26px; }
           .header-icon-btn { width: 44px; height: 44px; }
           .header-icon { width: 16px; height: 16px; }
-          .mobile-badge { display: none; }
         }
         @media (max-width: 639px) {
           .review-modal { width: 96vw; }
@@ -560,13 +573,18 @@ export default function SlopRadar() {
             </div>
             <div style={{ minWidth: 0, flex: "1 1 auto" }}>
               <h1 className="font-display font-semibold leading-tight logo-title" style={{ color: "#332E29" }}>
-                Slop Radar{" "}
-                <span
-                  className="mobile-badge font-body font-normal align-middle"
-                  style={{ fontSize: 12, color: "#B8863B", border: "1px solid #B8863B", borderRadius: 999, padding: "2px 8px", verticalAlign: "middle" }}
-                >
-                  Mobile
-                </span>
+                Slop Radar
+                {isMobile && (
+                  <>
+                    {" "}
+                    <span
+                      className="font-body font-normal align-middle"
+                      style={{ fontSize: 12, color: "#B8863B", border: "1px solid #B8863B", borderRadius: 999, padding: "2px 8px", verticalAlign: "middle" }}
+                    >
+                      Mobile
+                    </span>
+                  </>
+                )}
               </h1>
               <p className="font-data tracking-wide day-label" style={{ color: "#9C9285" }}>
                 DAY #{dayNumber}

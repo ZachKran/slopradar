@@ -229,6 +229,9 @@ export default function SlopRadar() {
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
   const zoomClickTimer = useRef(null);
+  const zoomImgRef = useRef(null);
+  const pinchState = useRef({ pointers: new Map(), active: false, startDist: 0, startScale: 1 });
+  const justPinchedRef = useRef(false);
   const [copied, setCopied] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [lifetime, setLifetime] = useState(DEFAULT_LIFETIME);
@@ -485,6 +488,17 @@ export default function SlopRadar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [vote, gameOver]);
 
+  // Live drag position for the REAL/AI hint badges, applied by mutating
+  // their elements directly (see useSwipeGesture's onFrame) rather than via
+  // setState, so a touch drag doesn't re-render the whole app every frame.
+  const realBadgeRef = useRef(null);
+  const aiBadgeRef = useRef(null);
+  const handleGestureFrame = useCallback((dx) => {
+    const progress = Math.min(1, Math.abs(dx) / DRAG_THRESHOLD);
+    if (realBadgeRef.current) realBadgeRef.current.style.opacity = dx > 15 ? Math.min(1, progress * 1.4) : 0;
+    if (aiBadgeRef.current) aiBadgeRef.current.style.opacity = dx < -15 ? Math.min(1, progress * 1.4) : 0;
+  }, []);
+
   // Unified drag-to-classify gesture (mouse, pen, touch, trackpad) — see
   // src/hooks/useSwipeGesture.js.
   const gesture = useSwipeGesture({
@@ -495,23 +509,80 @@ export default function SlopRadar() {
       setZoomOrigin({ x: 50, y: 50 });
       setZoomOpen(true);
     },
+    onFrame: handleGestureFrame,
   });
-  const { drag, dragging: isDragging } = gesture;
+  const { dragging: isDragging } = gesture;
 
-  const rotation = Math.max(-14, Math.min(14, drag.x / 14));
-  const dragProgress = Math.min(1, Math.abs(drag.x) / DRAG_THRESHOLD);
-
-  let cardTransform = `translate(${drag.x}px, ${drag.y}px) rotate(${rotation}deg)`;
-  let cardTransition = isDragging ? "none" : "transform 0.35s cubic-bezier(0.22,1,0.36,1)";
+  // While idle/dragging, the top card's transform is owned entirely by the
+  // gesture hook (direct DOM writes — see useSwipeGesture.js), so it's left
+  // out of this element's style here. Only the "exiting" fly-out below is
+  // driven by React state, since that's a one-shot animation independent of
+  // the gesture, and it takes over cleanly because the card is unmounted
+  // (replaced by the next one) right after it plays.
+  let cardTransform;
+  let cardTransition;
   if (phase === "exiting") {
     const flyX = exitDirection === 0 ? 0 : exitDirection * 650;
     const flyY = -40;
     cardTransform = `translate(${flyX}px, ${flyY}px) rotate(${exitDirection * 18}deg)`;
     cardTransition = "transform 0.32s cubic-bezier(0.55,0,1,0.45)";
   }
-  // No "feedback" phase override here anymore — the card simply holds
-  // whatever position/rotation it was swiped to instead of snapping back
-  // to center before flying off.
+
+  // Pinch-to-zoom for the full-size photo viewer. Handled with raw pointer
+  // events (not React state per move) for the same reason as the card drag
+  // above — every pointermove of a pinch is written straight to the image's
+  // own style, and only committed to React state once the pinch ends, so
+  // scaling stays smooth on mobile. Double-click still works for a mouse,
+  // but on a touchscreen double-tap is unreliable — most mobile browsers
+  // treat it as a page-zoom gesture rather than delivering two click events
+  // — so pinch is the primary way to zoom on mobile.
+  const pinchDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  const onZoomPointerDown = useCallback((e) => {
+    pinchState.current.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    if (pinchState.current.pointers.size === 2) {
+      const [a, b] = [...pinchState.current.pointers.values()];
+      pinchState.current.startDist = pinchDistance(a, b);
+      pinchState.current.startScale = zoomScale;
+      pinchState.current.active = true;
+    }
+  }, [zoomScale]);
+
+  const onZoomPointerMove = useCallback((e) => {
+    if (!pinchState.current.pointers.has(e.pointerId)) return;
+    pinchState.current.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pinchState.current.active || pinchState.current.pointers.size !== 2) return;
+    const [a, b] = [...pinchState.current.pointers.values()];
+    const factor = pinchDistance(a, b) / pinchState.current.startDist;
+    const nextScale = Math.min(4, Math.max(1, pinchState.current.startScale * factor));
+    const rect = e.currentTarget.getBoundingClientRect();
+    const originX = (((a.x + b.x) / 2 - rect.left) / rect.width) * 100;
+    const originY = (((a.y + b.y) / 2 - rect.top) / rect.height) * 100;
+    pinchState.current.lastScale = nextScale;
+    pinchState.current.lastOrigin = { x: originX, y: originY };
+    if (zoomImgRef.current) {
+      zoomImgRef.current.style.transition = "none";
+      zoomImgRef.current.style.transformOrigin = `${originX}% ${originY}%`;
+      zoomImgRef.current.style.transform = `scale(${nextScale})`;
+    }
+  }, []);
+
+  const endZoomPointer = useCallback((e) => {
+    pinchState.current.pointers.delete(e.pointerId);
+    if (pinchState.current.active && pinchState.current.pointers.size < 2) {
+      pinchState.current.active = false;
+      justPinchedRef.current = true;
+      setTimeout(() => {
+        justPinchedRef.current = false;
+      }, 300);
+      if (pinchState.current.lastScale != null) {
+        setZoomScale(pinchState.current.lastScale);
+        setZoomOrigin(pinchState.current.lastOrigin);
+        pinchState.current.lastScale = null;
+      }
+    }
+  }, []);
 
   const tier = getTier(accuracy, score.total);
 
@@ -605,6 +676,10 @@ export default function SlopRadar() {
         .streak-chip .streak-count { font-size: 15px; }
         .answer-btn { width: 68px; height: 68px; }
         .answer-icon { width: 28px; height: 28px; }
+        .lifetime-grid { font-size: 13px; }
+        .review-eyebrow { font-size: 10px; }
+        .summary-stat-label { font-size: 9px; }
+        .review-share-caption { font-size: 13px; }
         /* Sized off touch/pointer input (see isMobile above), not viewport
            width — a phone with "Request Desktop Site" on still has a mouse-
            free, coarse-pointer screen, so it should still get the larger
@@ -621,6 +696,25 @@ export default function SlopRadar() {
           .review-modal .summary-stat-value { font-size: 26px; }
           .review-modal .summary-stat-label { font-size: 12px; }
         }
+        /* On a touch device the end-of-game report gets a dedicated,
+           near-full-width layout instead of just reusing the same
+           max-w-md card the desktop gets shrunk into. */
+        .is-mobile .review-modal {
+          width: calc(100vw - 16px);
+          max-width: none;
+          padding: 30px 22px 26px;
+        }
+        .is-mobile .review-modal .review-eyebrow { font-size: 13px; }
+        .is-mobile .review-modal .review-title { font-size: 36px; }
+        .is-mobile .review-modal .review-blurb { font-size: 18px; margin-bottom: 26px; }
+        .is-mobile .review-modal .review-stats-grid { gap: 12px; margin-bottom: 22px; }
+        .is-mobile .review-modal .summary-stat-value { font-size: 36px; }
+        .is-mobile .review-modal .summary-stat-label { font-size: 14px; }
+        .is-mobile .review-modal .review-share-box { padding: 24px 20px; }
+        .is-mobile .review-modal .review-share-grid { font-size: 34px; }
+        .is-mobile .review-modal .review-share-caption { font-size: 16px; }
+        .is-mobile .review-modal .review-action-btn { padding: 20px 0; font-size: 18px; }
+        .is-mobile .review-modal .lifetime-grid { font-size: 16px; }
       `}</style>
 
       {/* Header */}
@@ -810,26 +904,28 @@ export default function SlopRadar() {
                     {isTop && (
                       <>
                         <div
+                          ref={realBadgeRef}
                           className="absolute top-5 right-4 font-display font-semibold text-sm px-2.5 py-1.5 rounded-lg pointer-events-none flex items-center gap-1.5"
                           style={{
                             color: "#6E8E6B",
                             border: "2.5px solid #6E8E6B",
                             backgroundColor: "rgba(255,254,251,0.92)",
                             transform: "rotate(-8deg)",
-                            opacity: drag.x > 15 ? Math.min(1, dragProgress * 1.4) : 0,
+                            opacity: 0,
                           }}
                         >
                           <RealIcon size={16} />
                           REAL
                         </div>
                         <div
+                          ref={aiBadgeRef}
                           className="absolute top-5 left-4 font-display font-semibold text-sm px-2.5 py-1.5 rounded-lg pointer-events-none flex items-center gap-1.5"
                           style={{
                             color: "#BD6A4E",
                             border: "2.5px solid #BD6A4E",
                             backgroundColor: "rgba(255,254,251,0.92)",
                             transform: "rotate(8deg)",
-                            opacity: drag.x < -15 ? Math.min(1, dragProgress * 1.4) : 0,
+                            opacity: 0,
                           }}
                         >
                           <AIIcon size={16} />
@@ -875,8 +971,8 @@ export default function SlopRadar() {
       {/* Action buttons */}
       {!gameOver && (
         <footer
-          className="w-full px-6 pb-2 pt-0 sm:pb-4 sm:pt-0.5 flex flex-wrap items-center justify-center gap-6 font-body"
-          style={{ maxWidth: isMobile ? 720 : 448 }}
+          className="w-full px-6 pb-2 pt-0 sm:pb-4 sm:pt-0.5 flex flex-wrap items-center justify-center font-body"
+          style={{ maxWidth: isMobile ? 720 : 448, gap: isMobile ? 56 : 24 }}
         >
           <button
             onClick={() => vote("ai")}
@@ -989,11 +1085,11 @@ export default function SlopRadar() {
         </div>
       )}
 
-      {/* Zoom modal — tap the photo to see it larger, double-click/double-tap
-          the photo to zoom in on that spot (double-click again to zoom back
-          out). Single-click handling on the photo is delayed slightly so a
-          fast second click can be caught and treated as a double-click
-          instead of closing the modal underneath it. */}
+      {/* Zoom modal — tap the photo to see it larger. Pinch with two fingers
+          to zoom in/out on mobile; double-click does the same for a mouse.
+          Single-click handling on the photo is delayed slightly so a fast
+          second click (or the end of a pinch) isn't mistaken for a tap that
+          closes the modal underneath it. */}
       {zoomOpen && currentCard && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 fade-in"
@@ -1008,9 +1104,15 @@ export default function SlopRadar() {
               overflow: "hidden",
               boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)",
               cursor: zoomScale > 1 ? "zoom-out" : "zoom-in",
+              touchAction: "none",
             }}
+            onPointerDown={onZoomPointerDown}
+            onPointerMove={onZoomPointerMove}
+            onPointerUp={endZoomPointer}
+            onPointerCancel={endZoomPointer}
           >
             <img
+              ref={zoomImgRef}
               src={currentCard.url}
               alt={currentCard.title}
               draggable={false}
@@ -1025,6 +1127,7 @@ export default function SlopRadar() {
               }}
               onClick={(e) => {
                 e.stopPropagation();
+                if (justPinchedRef.current) return;
                 if (zoomClickTimer.current) {
                   clearTimeout(zoomClickTimer.current);
                   zoomClickTimer.current = null;
@@ -1056,7 +1159,7 @@ export default function SlopRadar() {
             className="absolute bottom-6 left-0 right-0 text-center font-data"
             style={{ color: "rgba(251,246,236,0.7)", fontSize: 11 }}
           >
-            Double-click the photo to zoom in &middot; tap elsewhere to close
+            Pinch or double-click the photo to zoom &middot; tap elsewhere to close
           </p>
         </div>
       )}
@@ -1075,25 +1178,25 @@ export default function SlopRadar() {
           >
             {gameOver ? (
               <>
-                <p className="font-data uppercase text-center mb-2" style={{ color: "#B8863B", fontSize: 10, letterSpacing: "0.25em" }}>
+                <p className="font-data uppercase text-center mb-2 review-eyebrow" style={{ color: "#B8863B", letterSpacing: "0.25em" }}>
                   Daily Summary &middot; Day #{dayNumber}
                 </p>
-                <h2 className="font-display text-3xl sm:text-2xl font-semibold text-center mb-1" style={{ color: "#332E29" }}>
+                <h2 className="font-display text-3xl sm:text-2xl font-semibold text-center mb-1 review-title" style={{ color: "#332E29" }}>
                   {tier.title}
                 </h2>
-                <p className="font-body text-base sm:text-sm text-center mb-6" style={{ color: "#6B655A" }}>
+                <p className="font-body text-base sm:text-sm text-center mb-6 review-blurb" style={{ color: "#6B655A" }}>
                   {tier.blurb}
                 </p>
 
-                <div className="grid grid-cols-3 gap-2.5 mb-4">
+                <div className="grid grid-cols-3 gap-2.5 mb-4 review-stats-grid">
                   <SummaryStat label="Correct" value={`${score.correct}/${deck.length}`} />
                   <SummaryStat label="Accuracy" value={`${accuracy}%`} accent="#5C7B58" />
                   <SummaryStat label="Best Streak" value={score.bestStreak} accent="#B8863B" icon={<Trophy size={13} />} />
                 </div>
 
-                <div className="rounded-xl px-4 py-4 mb-5 text-center" style={{ backgroundColor: "#F7F1E4", border: "1px solid #EDE2CE" }}>
-                  <p className="font-display text-2xl sm:text-lg tracking-widest mb-1">{shareGrid}</p>
-                  <p className="font-data" style={{ color: "#9C9285", fontSize: 13 }}>
+                <div className="rounded-xl px-4 py-4 mb-5 text-center review-share-box" style={{ backgroundColor: "#F7F1E4", border: "1px solid #EDE2CE" }}>
+                  <p className="font-display text-2xl sm:text-lg tracking-widest mb-1 review-share-grid">{shareGrid}</p>
+                  <p className="font-data review-share-caption" style={{ color: "#9C9285" }}>
                     {score.correct}/{deck.length} correct &middot; {accuracy}% accuracy
                   </p>
                 </div>
@@ -1119,7 +1222,7 @@ export default function SlopRadar() {
               <>
                 <button
                   onClick={copyShare}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-body font-semibold mt-6 mb-2.5 transition active:scale-95"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-body font-semibold mt-6 mb-2.5 transition active:scale-95 review-action-btn"
                   style={{ backgroundColor: "#332E29", color: "#FBF6EC" }}
                 >
                   {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -1127,7 +1230,7 @@ export default function SlopRadar() {
                 </button>
                 <button
                   onClick={resetGame}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-body font-medium transition active:scale-95"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl py-3 font-body font-medium transition active:scale-95 review-action-btn"
                   style={{ backgroundColor: "#F2E9D8", color: "#6B655A" }}
                 >
                   <RotateCcw size={15} />
@@ -1295,7 +1398,7 @@ function SummaryStat({ label, value, accent = "#332E29", icon }) {
       <span className="font-display font-semibold text-lg summary-stat-value" style={{ color: accent }}>
         {value}
       </span>
-      <span className="font-data uppercase tracking-wide summary-stat-label" style={{ color: "#9C9285", fontSize: 9 }}>
+      <span className="font-data uppercase tracking-wide summary-stat-label" style={{ color: "#9C9285" }}>
         {label}
       </span>
     </div>
@@ -1309,8 +1412,8 @@ function LifetimeStats({ lifetime }) {
     lifetime.totalAnswered > 0 ? Math.round((lifetime.totalCorrect / lifetime.totalAnswered) * 100) : 0;
 
   return (
-    <div className="rounded-xl px-4 py-4" style={{ backgroundColor: "#F7F1E4", border: "1px solid #EDE2CE" }}>
-      <div className="grid grid-cols-2 gap-y-2 gap-x-3 font-body mb-4" style={{ color: "#514C43", fontSize: 13 }}>
+    <div className="rounded-xl px-4 py-4 lifetime-box" style={{ backgroundColor: "#F7F1E4", border: "1px solid #EDE2CE" }}>
+      <div className="grid grid-cols-2 gap-y-2 gap-x-3 font-body mb-4 lifetime-grid" style={{ color: "#514C43" }}>
         <span>Games played</span>
         <span className="text-right font-semibold">{lifetime.gamesPlayed}</span>
         <span>All-time accuracy</span>

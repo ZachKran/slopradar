@@ -13,37 +13,62 @@ const TAP_THRESHOLD = 6;
  * preventDefault silently no-ops unless the listener is bound natively —
  * this hook does that itself via the returned ref.
  *
+ * The drag position is written straight to the bound element's own
+ * `style.transform` (throttled to one write per animation frame) instead of
+ * going through React state. Piping every pointermove through setState was
+ * re-rendering the whole app on every touch event — on a big component tree
+ * that's more re-render work than a phone can keep up with per frame, which
+ * is what read as choppy dragging. `dragging` is still real React state
+ * since it only flips twice per gesture (start/end), not once per frame.
+ * Callers that need the live position (e.g. to fade in a "REAL"/"AI" badge)
+ * get it via the onFrame(dx, dy) callback, which they should also apply by
+ * mutating their own element directly rather than via setState.
+ *
  * onCommit("left" | "right") fires once the drag clears THRESHOLD.
  * onTap() fires when a press moves less than TAP_THRESHOLD in either axis.
  */
-export function useSwipeGesture({ disabled, onCommit, onTap }) {
-  const [drag, setDrag] = useState({ x: 0, y: 0 });
+export function useSwipeGesture({ disabled, onCommit, onTap, onFrame }) {
   const [dragging, setDragging] = useState(false);
   const elRef = useRef(null);
   const start = useRef({ x: 0, y: 0 });
   const delta = useRef({ x: 0, y: 0 });
+  const rafId = useRef(null);
   const wheelDx = useRef(0);
   const wheelTimer = useRef(null);
-  const rafId = useRef(null);
 
-  // Touch fires pointermove far more often than the screen can repaint, so
-  // setState-per-event was queuing more React re-renders than a mobile
-  // device can keep up with, which read as choppy dragging. Mouse/pen
-  // dragging isn't affected by this — it's low-frequency enough already —
-  // so only touch input is coalesced to one state update per animation
-  // frame here.
-  const scheduleDrag = useCallback(() => {
+  const paint = useCallback(
+    (dx, dy, animate) => {
+      const el = elRef.current;
+      if (el) {
+        const rotation = Math.max(-14, Math.min(14, dx / 14));
+        el.style.transition = animate ? "transform 0.32s cubic-bezier(0.22,1,0.36,1)" : "none";
+        el.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${rotation}deg)`;
+      }
+      onFrame?.(dx, dy);
+    },
+    [onFrame]
+  );
+
+  const cancelFrame = useCallback(() => {
+    if (rafId.current != null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+  }, []);
+
+  const scheduleFrame = useCallback(() => {
     if (rafId.current != null) return;
     rafId.current = requestAnimationFrame(() => {
       rafId.current = null;
-      setDrag({ x: delta.current.x, y: delta.current.y * 0.3 });
+      paint(delta.current.x, delta.current.y, false);
     });
-  }, []);
+  }, [paint]);
 
   const reset = useCallback(() => {
+    cancelFrame();
     delta.current = { x: 0, y: 0 };
-    setDrag({ x: 0, y: 0 });
-  }, []);
+    paint(0, 0, true);
+  }, [cancelFrame, paint]);
 
   const settle = useCallback(() => {
     const { x, y } = delta.current;
@@ -76,37 +101,26 @@ export function useSwipeGesture({ disabled, onCommit, onTap }) {
       const dx = e.clientX - start.current.x;
       const dy = e.clientY - start.current.y;
       delta.current = { x: dx, y: dy };
-      if (e.pointerType === "touch") {
-        scheduleDrag();
-      } else {
-        setDrag({ x: dx, y: dy * 0.3 });
-      }
+      scheduleFrame();
     },
-    [disabled, dragging, scheduleDrag]
+    [disabled, dragging, scheduleFrame]
   );
-
-  const cancelScheduledDrag = useCallback(() => {
-    if (rafId.current != null) {
-      cancelAnimationFrame(rafId.current);
-      rafId.current = null;
-    }
-  }, []);
 
   const onPointerUp = useCallback(() => {
     if (!dragging) return;
-    cancelScheduledDrag();
+    cancelFrame();
     setDragging(false);
     settle();
-  }, [dragging, settle, cancelScheduledDrag]);
+  }, [dragging, settle, cancelFrame]);
 
   const onPointerCancel = useCallback(() => {
     if (!dragging) return;
-    cancelScheduledDrag();
+    cancelFrame();
     setDragging(false);
     reset();
-  }, [dragging, reset, cancelScheduledDrag]);
+  }, [dragging, reset, cancelFrame]);
 
-  useEffect(() => () => cancelScheduledDrag(), [cancelScheduledDrag]);
+  useEffect(() => cancelFrame, [cancelFrame]);
 
   useEffect(() => {
     const el = elRef.current;
@@ -117,7 +131,8 @@ export function useSwipeGesture({ disabled, onCommit, onTap }) {
       e.preventDefault();
       wheelDx.current -= e.deltaX;
       setDragging(true);
-      setDrag({ x: wheelDx.current, y: 0 });
+      delta.current = { x: wheelDx.current, y: 0 };
+      paint(wheelDx.current, 0, false);
 
       clearTimeout(wheelTimer.current);
       wheelTimer.current = setTimeout(() => {
@@ -134,11 +149,10 @@ export function useSwipeGesture({ disabled, onCommit, onTap }) {
       el.removeEventListener("wheel", onWheel);
       clearTimeout(wheelTimer.current);
     };
-  }, [disabled, settle]);
+  }, [disabled, settle, paint]);
 
   return {
     ref: elRef,
-    drag,
     dragging,
     reset,
     bind: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel },

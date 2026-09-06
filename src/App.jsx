@@ -35,14 +35,26 @@ import { useSwipeGesture } from "./hooks/useSwipeGesture.js";
 
 const LAUNCH_DATE = new Date("2025-01-01T00:00:00Z");
 
+// Both of these are keyed off the player's LOCAL calendar date, not UTC.
+// They used to use UTC (via setUTCHours / toISOString), which rolls the
+// "day" over at UTC midnight — e.g. 5pm/7pm/8pm the previous day for US
+// timezones. A player west of the UK would then get served what still
+// read to them as "yesterday's" deck for most of their afternoon/evening,
+// which is exactly what a daily-puzzle game (Wordle-style) shouldn't do:
+// the deck should change at the player's own midnight.
 function getDayNumber() {
   const now = new Date();
-  const diffMs = now.setUTCHours(0, 0, 0, 0) - LAUNCH_DATE.getTime();
+  const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diffMs = localMidnight - LAUNCH_DATE.getTime();
   return Math.max(1, Math.floor(diffMs / 86400000) + 1);
 }
 
 function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // Small deterministic PRNG (mulberry32) seeded from today's date, so every
@@ -119,7 +131,7 @@ function reduceStreaks(cards, seedStr, maxRun = 3, attempts = 6) {
 async function fetchDailyDeck() {
   if (!supabase) return null; // env vars not configured yet — use mock data
   try {
-    const { data, error } = await supabase.from("cards").select("*");
+    const { data, error } = await supabase.from("cards").select("*").order("id", { ascending: true });
     if (error || !data || data.length < 4) throw new Error("supabase fetch failed or pool too small");
     const shuffled = seededShuffle(data, todayISO());
     const daily = reduceStreaks(shuffled.slice(0, 10), todayISO() + "-order");
@@ -214,6 +226,9 @@ export default function SlopRadar() {
   const [showHelp, setShowHelp] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
+  const zoomClickTimer = useRef(null);
   const [copied, setCopied] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [lifetime, setLifetime] = useState(DEFAULT_LIFETIME);
@@ -268,6 +283,7 @@ export default function SlopRadar() {
   }, []);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => () => clearTimeout(zoomClickTimer.current), []);
   useEffect(() => {
     soundOnRef.current = soundOn;
   }, [soundOn]);
@@ -474,7 +490,11 @@ export default function SlopRadar() {
   const gesture = useSwipeGesture({
     disabled: phase !== "idle",
     onCommit: (direction) => vote(direction === "right" ? "real" : "ai"),
-    onTap: () => setZoomOpen(true),
+    onTap: () => {
+      setZoomScale(1);
+      setZoomOrigin({ x: 50, y: 50 });
+      setZoomOpen(true);
+    },
   });
   const { drag, dragging: isDragging } = gesture;
 
@@ -575,21 +595,22 @@ export default function SlopRadar() {
         .logo-title { font-size: 30px; line-height: 1; overflow-wrap: anywhere; }
         .day-label { font-size: 15px; line-height: 1.15; overflow-wrap: anywhere; }
         .game-caption { font-size: 20px; }
-        .header-icon-btn { width: 44px; height: 44px; }
-        .header-icon { width: 16px; height: 16px; }
+        /* Volume/help/stats/streak share this size on every device — kept
+           deliberately identical across mobile and desktop rather than
+           scaling with isMobile like the answer buttons below. */
+        .header-icon-btn { width: 56px; height: 56px; }
+        .header-icon { width: 22px; height: 22px; }
+        .streak-chip { width: 56px; height: 56px; padding: 0; justify-content: center; gap: 3px; }
+        .streak-chip .streak-icon { width: 22px; height: 22px; }
+        .streak-chip .streak-count { font-size: 15px; }
         .answer-btn { width: 68px; height: 68px; }
         .answer-icon { width: 28px; height: 28px; }
         /* Sized off touch/pointer input (see isMobile above), not viewport
            width — a phone with "Request Desktop Site" on still has a mouse-
            free, coarse-pointer screen, so it should still get the larger
            touch targets. */
-        .is-mobile .header-icon-btn { width: 132px; height: 132px; }
-        .is-mobile .header-icon { width: 48px; height: 48px; }
         .is-mobile .answer-btn { width: 204px; height: 204px; }
         .is-mobile .answer-icon { width: 84px; height: 84px; }
-        .is-mobile .streak-chip { width: 132px; height: 132px; padding: 0; justify-content: center; gap: 4px; }
-        .is-mobile .streak-chip .streak-icon { width: 48px; height: 48px; }
-        .is-mobile .streak-chip .streak-count { font-size: 32px; }
         @media (min-width: 640px) {
           .logo-title { font-size: 40px; }
           .day-label { font-size: 20px; }
@@ -626,7 +647,7 @@ export default function SlopRadar() {
               </p>
             </div>
           </div>
-          <div className="flex items-center flex-wrap justify-center sm:justify-end gap-3 sm:gap-1">
+          <div className="flex items-center flex-nowrap justify-center sm:justify-end gap-3 sm:gap-1 mt-2">
             <button
               onClick={toggleSound}
               aria-label={soundOn ? "Mute sound" : "Unmute sound"}
@@ -968,19 +989,61 @@ export default function SlopRadar() {
         </div>
       )}
 
-      {/* Zoom modal — tap the photo to see it larger */}
+      {/* Zoom modal — tap the photo to see it larger, double-click/double-tap
+          the photo to zoom in on that spot (double-click again to zoom back
+          out). Single-click handling on the photo is delayed slightly so a
+          fast second click can be caught and treated as a double-click
+          instead of closing the modal underneath it. */}
       {zoomOpen && currentCard && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 fade-in"
           style={{ backgroundColor: "rgba(20,17,14,0.92)" }}
           onClick={() => setZoomOpen(false)}
         >
-          <img
-            src={currentCard.url}
-            alt={currentCard.title}
-            className="rounded-xl"
-            style={{ maxWidth: "92vw", maxHeight: "82dvh", objectFit: "contain", boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)" }}
-          />
+          <div
+            className="relative rounded-xl"
+            style={{
+              maxWidth: "92vw",
+              maxHeight: "82dvh",
+              overflow: "hidden",
+              boxShadow: "0 20px 60px -10px rgba(0,0,0,0.6)",
+              cursor: zoomScale > 1 ? "zoom-out" : "zoom-in",
+            }}
+          >
+            <img
+              src={currentCard.url}
+              alt={currentCard.title}
+              draggable={false}
+              style={{
+                display: "block",
+                maxWidth: "92vw",
+                maxHeight: "82dvh",
+                objectFit: "contain",
+                transform: `scale(${zoomScale})`,
+                transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
+                transition: "transform 0.25s ease-out",
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (zoomClickTimer.current) {
+                  clearTimeout(zoomClickTimer.current);
+                  zoomClickTimer.current = null;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setZoomOrigin({
+                    x: ((e.clientX - rect.left) / rect.width) * 100,
+                    y: ((e.clientY - rect.top) / rect.height) * 100,
+                  });
+                  setZoomScale((s) => (s > 1 ? 1 : 2.5));
+                } else {
+                  zoomClickTimer.current = setTimeout(() => {
+                    zoomClickTimer.current = null;
+                    setZoomOpen(false);
+                  }, 260);
+                }
+              }}
+              onDoubleClick={(e) => e.preventDefault()}
+            />
+          </div>
           <button
             onClick={() => setZoomOpen(false)}
             aria-label="Close zoomed image"
@@ -993,7 +1056,7 @@ export default function SlopRadar() {
             className="absolute bottom-6 left-0 right-0 text-center font-data"
             style={{ color: "rgba(251,246,236,0.7)", fontSize: 11 }}
           >
-            Tap anywhere to close
+            Double-click the photo to zoom in &middot; tap elsewhere to close
           </p>
         </div>
       )}
